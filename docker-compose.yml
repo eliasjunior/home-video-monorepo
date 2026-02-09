@@ -1,15 +1,26 @@
 services:
-  api:
+  api-dev:
     build:
       context: ./apps/api
     env_file:
-      - ./apps/api/.env.docker
+      - ./.env.docker.api.dev
     ports:
       - "8080:8080"
     volumes:
       - /Users/eliasjunior/Downloads/Videos:/videos
     profiles:
       - dev
+
+  api:
+    build:
+      context: ./apps/api
+    env_file:
+      - ./.env.docker.prod
+    ports:
+      - "8080:8080"
+    volumes:
+      - /Users/eliasjunior/Downloads/Videos:/videos
+    profiles:
       - prod
 
   web-dev:
@@ -17,14 +28,14 @@ services:
       context: ./apps/web
       dockerfile: Dockerfile.dev
     env_file:
-      - ./.env.docker.dev
+      - ./.env.docker.web.dev
     ports:
       - "3000:3000"
     volumes:
       - ./apps/web:/app
       - /app/node_modules
     depends_on:
-      - api
+      - api-dev
     profiles:
       - dev
 

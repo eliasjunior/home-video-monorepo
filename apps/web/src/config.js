@@ -1,17 +1,26 @@
+/* global globalThis */
 const { NODE_ENV, REACT_APP_SERVER_PROTOCOL, REACT_APP_SERVER_HOST } =
   process.env;
 
 export default function config() {
   const result = {};
 
-  const fallbackHost =
-    typeof window !== "undefined" ? window.location.hostname : "localhost";
-  const host =
-    REACT_APP_SERVER_HOST ||
-    (NODE_ENV === "development" ? fallbackHost : "");
+  const envHost = REACT_APP_SERVER_HOST?.trim();
+  const windowRef =
+    typeof globalThis !== "undefined" ? globalThis.window : undefined;
+  const devHost =
+    windowRef && windowRef.location && windowRef.location.hostname
+      ? windowRef.location.hostname
+      : "localhost";
+  const host = NODE_ENV === "development" ? devHost : envHost || "";
   if (!host && NODE_ENV === "production") {
     throw new Error(
       "REACT_APP_SERVER_HOST is required in production to avoid localhost fallback"
+    );
+  }
+  if (NODE_ENV === "development" && envHost && envHost !== devHost) {
+    console.warn(
+      "REACT_APP_SERVER_HOST is ignored in development; using window.location.hostname instead"
     );
   }
   if (NODE_ENV !== "test") {
@@ -21,8 +30,8 @@ export default function config() {
   }
   if (NODE_ENV === "production") {
     const defaultProtocol =
-      typeof window !== "undefined"
-        ? window.location.protocol.replace(":", "")
+      windowRef && windowRef.location && windowRef.location.protocol
+        ? windowRef.location.protocol.replace(":", "")
         : "https";
     result.PROTOCOL = REACT_APP_SERVER_PROTOCOL || defaultProtocol;
     result.PORT = process.env.PORT || 8080;
