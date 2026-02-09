@@ -1,0 +1,33 @@
+/* file name has to be capital issues on the raspberry pi */
+.footer {
+  height: 5vh;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  background-color: #0f0e0e;
+  width: 100%;
+}
+.icon-font {
+  font-size: 0.875em;
+}
+
+@media only screen and (max-width: 700px) {
+  .footer {
+    position: fixed;
+    bottom: 0;
+  }
+}
+
+@media only screen and (min-width: 700px) {
+  .footer {
+    order: -1;
+    height: 50vh;
+    background-color: #0b0626;
+    flex-basis: 10%;
+    min-width: 200px;
+    flex-direction: column;
+  }
+  .icon-font {
+    font-size: 3em;
+  }
+}

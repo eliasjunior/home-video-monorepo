@@ -1,0 +1,1 @@
+nohup npm start > /home/pi/Temp/logs/reactapp.log &

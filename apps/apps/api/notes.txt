@@ -1,0 +1,63 @@
+- image with encode url for many options are not possible copy and paste(see scripts/download_encode_img.sh)
+
+when testing with front-end images is broken at the moment.
+
+- docker compose, it seems to be able to see changes locally I need to delete the image 
+- there is no build for this app, docker compose will build it
+- docker compose is the V2 and does not accept passing vars on the command line, at least at the date writing here
+run
+
+docker compose up
+  see .env
+
+Passing to react app did not work, I guess only via .env(in the react project) starting with "REACT_APP"   
+
+
+scripts to start service on Pi 
+script to start both servers 
+`/usr/local/bin/start-home-video-api.sh`
+then restart service
+sudo systemctl stop start-home-video-api.service
+sudo systemctl start start-home-video-api.service
+
+check service is running
+systemctl list-units --type=service | grep "start-home"
+
+check service command
+sudo journalctl -u start-home-video-api.service
+
+
+nginx
+sudo apt-get update
+sudo apt-get install nginx
+
+images are `/var/www/images`
+config is
+sudo nano /etc/nginx/sites-available/default
+json map is `/var/www/html/json/movie_map_prod.json`
+
+// task create folder with images
+- read the list of movie's name
+- wget 
+OBS: changes to add new image to cumbersome
+- change map
+- create folder
+- download image
+- pull change code from map changes reflect
+- stop all node services(back and front)
+- restart using /usr/local/bin/start-home-video-api.sh
+
+X-Powered-By: Express
+Vary: Origin
+Access-Control-Allow-Credentials: true
+Set-Cookie: access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEiLCJ1c2VybmFtZSI6ImFkbWluIiwiaWF0IjoxNzcwNTg0MzM1LCJleHAiOjE3NzA1ODUyMzV9.KOi3A7tjmehegHVtTaI45BYAI1XDqM0VbcfAWvZRi1k; Path=/; HttpOnly; Secure; SameSite=Lax
+Set-Cookie: refresh_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEiLCJqdGkiOiJkNjE4MGRhYi1lZmNkLTQ3YWUtYTg1My1hMGI5MmQwNjYxODMiLCJ0eXBlIjoicmVmcmVzaCIsImlhdCI6MTc3MDU4NDMzNSwiZXhwIjoxNzg2MTM2MzM1fQ.uf7Hp9jhSx0YN1iW5YcEDplZoDSdL8Z4A5VQrWMMie8; Path=/auth; HttpOnly; Secure; SameSite=Lax
+Set-Cookie: csrf_token=5c46360d5abe4c45b43ac2917ed280c4f63ce0108121a92c0f90df0b4c54e8b5; Path=/; Secure; SameSite=Lax
+Content-Type: application/json; charset=utf-8
+Content-Length: 191
+ETag: W/"bf-HoRmpINQDLgHDvoYXpJfvcDYUwE"
+Date: Sun, 08 Feb 2026 20:58:55 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"accessToken":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEiLCJ1c2VybmFtZSI6ImFkbWluIiwiaWF0IjoxNzcwNTg0MzM1LCJleHAiOjE3NzA1ODUyMzV9.KOi3A7tjmehegHVtTaI45BYAI1XDqM0VbcfAWvZRi1k"}%  

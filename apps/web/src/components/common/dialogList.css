@@ -1,0 +1,51 @@
+.hv-popup {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+}
+
+.hv-list {
+  padding: 3px;
+}
+.hv-list--item {
+  color: aliceblue;
+  border: 1px solid rgb(229, 229, 239);
+  border-radius: 5px;
+  padding: 2px;
+  margin-top: 3px;
+  background-color: #d2cee642;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hv-list--item:hover {
+  background-color: #551a8b;
+  height: 20px;
+}
+
+@media only screen and (min-width: 700px) {
+  .hv-popup--box {
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
+  }
+
+  .hv-popup:hover .hv-popup--box {
+    display: block;
+    z-index: 4;
+  }
+
+  .hv-list--item {
+    width: 210px;
+  }
+}
+
+/* phone */
+@media only screen and (max-width: 700px) {
+  .hv-popup {
+    display: block;
+  }
+  .hv-list--item {
+    width: 110px;
+  }
+}

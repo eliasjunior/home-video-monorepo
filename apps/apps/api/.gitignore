@@ -1,0 +1,41 @@
+# Specifies files to intentionally ignore when using Git
+# http://git-scm.com/docs/gitignore
+
+*.csv
+*.dat
+*.iml
+*.log
+*.out
+*.pid
+*.seed
+*.sublime-*
+*.swo
+*.swp
+*.tgz
+*.m4v
+*.avi
+*.mp4
+
+.DS_Store
+.idea
+.idea/
+.project
+.strong-pm
+coverage
+node_modules
+npm-debug.log
+
+.idea/misc.xml
+
+*.iws
+
+.tmp/
+# env files
+.env.production
+data/progress.json
+#bower
+node_modules/
+www/build/
+platforms/
+plugins/
+Thumbs.db

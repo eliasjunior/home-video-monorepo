@@ -1,0 +1,29 @@
+.player {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    background-color: rgb(30, 29, 29);
+}
+
+.video-guy {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+  }
+
+.player-back {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(10, 10, 10, 0.6);
+  color: #f0f2f5;
+  cursor: pointer;
+}
+  

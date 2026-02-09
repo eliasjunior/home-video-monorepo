@@ -1,0 +1,6 @@
+
+- Test coverage, instal Istanbul
+- Add more testsTest 
+- Can I make home better
+- Do I need a better backup-img ? 
+- add a lib to npm -- see to add requiredParameter

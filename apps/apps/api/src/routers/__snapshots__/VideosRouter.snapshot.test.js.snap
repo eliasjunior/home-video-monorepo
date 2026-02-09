@@ -1,0 +1,18 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`VideosRouter snapshot matches the /videos response shape 1`] = `
+{
+  "allIds": [
+    "MovieA",
+  ],
+  "byId": {
+    "MovieA": {
+      "description": Any<String>,
+      "id": "MovieA",
+      "img": Any<String>,
+      "name": "MovieA.mp4",
+      "sub": "MovieA.srt",
+    },
+  },
+}
+`;
