@@ -1,11 +1,26 @@
-import React from 'react';
-import { createRoot } from "react-dom/client";
-import App from './App';
+jest.mock("components/customHooks", () => ({
+  useServerStatus: jest.fn(),
+}));
 
-it('renders without crashing', () => {
-  const div = document.createElement('div');
+jest.mock("./Routers", () => () => <div>ROUTERS</div>);
 
-  const root = createRoot(div);
-  root.render(<App />);
-  root.unmount();
+import React from "react";
+import { render, screen } from "@testing-library/react";
+import App from "./App";
+import { useServerStatus } from "components/customHooks";
+
+describe("App", () => {
+  it("renders offline message when server is down", () => {
+    useServerStatus.mockReturnValueOnce(false);
+    render(<App />);
+
+    expect(screen.getByText("server is unreachable")).toBeTruthy();
+  });
+
+  it("renders routes when server is online", () => {
+    useServerStatus.mockReturnValueOnce(true);
+    render(<App />);
+
+    expect(screen.getByText("ROUTERS")).toBeTruthy();
+  });
 });

@@ -1,0 +1,42 @@
+services:
+  api:
+    build:
+      context: ./apps/api
+    env_file:
+      - ./apps/api/.env.docker
+    ports:
+      - "8080:8080"
+    volumes:
+      - /Users/eliasjunior/Downloads/Videos:/videos
+    profiles:
+      - dev
+      - prod
+
+  web-dev:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile.dev
+    env_file:
+      - ./.env.docker.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+    depends_on:
+      - api
+    profiles:
+      - dev
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    env_file:
+      - ./.env.docker.prod
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    profiles:
+      - prod

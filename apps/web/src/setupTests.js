@@ -1,4 +1,24 @@
-// import { configure } from 'enzyme';
-// import Adapter from 'enzyme-adapter-react-16';
+let consoleErrorSpy;
+const originalConsoleError = console.error;
 
-// configure({ adapter: new Adapter() });
+beforeAll(() => {
+  consoleErrorSpy = jest
+    .spyOn(console, "error")
+    .mockImplementation((message, ...args) => {
+      const text = String(message || "");
+      if (
+        text.includes("ReactDOM.render is no longer supported in React 18") ||
+        text.includes("unmountComponentAtNode is deprecated") ||
+        text.includes("ReactDOMTestUtils.act is deprecated")
+      ) {
+        return;
+      }
+      originalConsoleError(message, ...args);
+    });
+});
+
+afterAll(() => {
+  if (consoleErrorSpy) {
+    consoleErrorSpy.mockRestore();
+  }
+});
