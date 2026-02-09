@@ -6,15 +6,16 @@ assume capabilities beyond what is explicitly stated.
 
 ---
 
-## Base Context
+## Base Context (Monorepo)
 
-- This is a **Node.js backend application**.
+- This is a **monorepo** with:
+  - `apps/api`: Node.js backend
+  - `apps/web`: React frontend
 - Project purpose:
   - Hobby / learning project
   - Focused on gradual improvement (“baby steps”).
 - Stability and clarity are more important than bleeding-edge features.
-- Frontend is **out of scope** unless explicitly mentioned.
-- The app is expected to **run locally** after every change.
+- Each app is expected to **run locally** after every change.
 
 ---
 
@@ -35,7 +36,7 @@ Agents must:
 
 ---
 
-## Current Context: Dependency Modernization
+## API Context: Dependency Modernization
 
 - `package.json` dependencies are **outdated**.
 - The app currently:
@@ -47,7 +48,7 @@ Agents must:
   - Incrementally update dependencies
   - Keep the app running at all times
 
-## Current Context: Auth (Cookie + CSRF)
+## API Context: Auth (Cookie + CSRF)
 
 - The API supports **HttpOnly cookie-based auth** for access + refresh tokens.
 - Cookies:
@@ -65,7 +66,7 @@ Agents must:
 
 ---
 
-## Task: Update Dependencies Safely
+## API Task: Update Dependencies Safely
 
 The agent must:
 
@@ -89,7 +90,7 @@ The agent must:
 
 ---
 
-## Completion Criteria
+## API Completion Criteria
 
 This task is considered complete when:
 - All dependencies are updated to stable versions
@@ -114,7 +115,7 @@ Agents must not assume previous context remains valid unless explicitly stated.
 
 ---
 
-## Suggested Next Tasks (Testing-First)
+## API Suggested Next Tasks (Testing-First)
 
 1. Add a `smoke` script to run only smoke/health tests.
 2. Add a test helper to load `.env.test` safely and avoid config drift.
@@ -125,14 +126,14 @@ Agents must not assume previous context remains valid unless explicitly stated.
 7. Add a minimal snapshot test for the videos JSON response shape.
 8. Set coverage thresholds (start low, e.g. 30%) and gradually increase.
 
-## Suggested Next Tasks (Docker, Baby Steps)
+## API Suggested Next Tasks (Docker, Baby Steps)
 
 1. Add a `.dockerignore` to reduce build context size.
 2. Update `Dockerfile` to a local/dev-friendly base image (align with Node 24).
 3. Add a `docker:build` script to build the image locally.
 4. Add a short README section on how to run the container locally.
 
-## Suggested Next Tasks (Monorepo, Baby Steps)
+## Monorepo Suggested Next Tasks (Baby Steps)
 
 Goal: create a new **monorepo** for FE + API while keeping existing repos intact.
 
@@ -154,7 +155,7 @@ Goal: create a new **monorepo** for FE + API while keeping existing repos intact
 
 ---
 
-## Next Task: Add Authentication (JWT)
+## API Next Task: Add Authentication (JWT)
 
 **Goal**
 - Add authentication using JWT.
@@ -193,3 +194,53 @@ Goal: create a new **monorepo** for FE + API while keeping existing repos intact
 - Refresh token store: in-memory adapter, injectable for future replacement.
 - Access token TTL: 15 minutes.
 - Refresh token TTL: 180 days.
+
+---
+
+## Frontend Context (apps/web)
+
+- This is a **React SPA** (client for the API).
+- Stability and clarity are more important than bleeding-edge changes.
+- The app is expected to **run locally** after every change.
+- Backend authentication uses **JWT access + refresh tokens**.
+
+## Frontend Current Task: E2E Local Validation (Frontend + Backend)
+
+Goal: Verify the React app works end-to-end with the local API and JWT auth.
+
+### Required Info
+- API base URL (e.g. `http://localhost:8080`)
+- Where to configure API URL (env file or config)
+- Auth credentials (username/password)
+- Frontend run commands
+
+### E2E Steps (Small, Verifiable)
+1. Install dependencies and start the React app locally.
+2. Configure API base URL to the local backend.
+3. Login flow:
+   - Call `/auth/login` from the frontend.
+   - Store `accessToken` in memory (not localStorage).
+4. Protected API call:
+   - Ensure API requests include `Authorization: Bearer <accessToken>`.
+   - Confirm `/videos` returns data.
+5. Refresh flow:
+   - On `401`, call `/auth/refresh`.
+   - Replace access token in memory.
+6. UI verification:
+   - Videos list loads.
+   - Series list loads.
+   - Player streams a video.
+7. Document any issues and the minimal fix.
+
+## Frontend Completion Criteria
+
+- Frontend loads data from backend locally.
+- JWT auth flow works end-to-end (login → access → refresh).
+- No blocking console/runtime errors.
+
+## Frontend Suggested Next Tasks
+
+1. Add a simple auth service module (login/refresh + token storage in memory).
+2. Add an API client wrapper with a 401 refresh retry.
+3. Add a minimal login UI for manual testing.
+4. Add E2E smoke tests (optional).
