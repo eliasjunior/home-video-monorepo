@@ -262,3 +262,58 @@ Responses:
 Notes:
 - Progress is stored locally on the API in `data/progress.json`. Restarting the server
   does not clear progress, but deleting the file will.
+
+## Docker Troubleshooting (Raspberry Pi)
+
+### Symptoms we hit
+- FE loads, but API errors like `GET https://localhost:8080/health net::ERR_SSL_PROTOCOL_ERROR`
+- API logs show `/videos/Movies does not exist or cannot access it`
+- `curl -I http://localhost:3000` fails even though containers are up
+
+### Fixes applied
+
+1. Fix API volume mount to the Pi path
+   - In `docker-compose.yml` (prod `api`), change:
+     - `- /Users/eliasjunior/Downloads/Videos:/videos`
+     - to `- /home/gandalf/Videos:/videos`
+
+2. Fix web container port mapping
+   - The web container uses nginx (listens on `80` internally).
+   - In `docker-compose.yml` (prod `web`), change:
+     - `"3000:3000"`
+     - to `"3000:80"`
+
+3. Ensure video folder structure exists on the Pi
+   ```bash
+   mkdir -p /home/gandalf/Videos/Movies/TestMovie
+   mkdir -p /home/gandalf/Videos/Series
+   ```
+
+4. Recreate containers to apply changes
+   ```bash
+   cd /home/gandalf/Projects/home-video-monorepo
+   docker compose --profile prod up --build -d --force-recreate
+   ```
+
+### Quick verification
+
+- FE should respond:
+  ```bash
+  curl -I http://localhost:3000
+  ```
+- API container should see the videos:
+  ```bash
+  docker exec -it home-video-monorepo-api-1 sh -c "ls -la /videos && ls -la /videos/Movies"
+  ```
+
+### Expected browser access
+- Open from another device:
+  ```
+  http://<PI-IP>:3000
+  ```
+
+### Automation (TODO)
+- Use the Pi script below to run all checks and fixes above (paths, ports, folders, rebuild, verify):
+  ```bash
+  /home/gandalf/Projects/home-video-monorepo/scripts/pi-troubleshoot.sh
+  ```

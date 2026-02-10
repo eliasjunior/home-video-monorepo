@@ -19,7 +19,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - /Users/eliasjunior/Downloads/Videos:/videos
+      - /home/gandalf/Videos:/videos
     profiles:
       - prod
 
@@ -46,7 +46,7 @@ services:
     env_file:
       - ./.env.docker.web.prod
     ports:
-      - "3000:3000"
+      - "3000:80"
     depends_on:
       - api
     profiles:
