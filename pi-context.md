@@ -140,3 +140,38 @@ sed -i.bak 's|^IMAGE_FALLBACK_BASE_URL=.*|IMAGE_FALLBACK_BASE_URL=http://192.168
 cd /home/gandalf/Projects/home-video-monorepo
 docker compose --profile prod up --build -d --force-recreate
 ```
+
+## Common Issue: 401 Unauthorized After Login (HTTP + Production)
+
+Symptoms:
+- Login succeeds, but protected endpoints (e.g. `/videos`) return `401`.
+- Works in dev, breaks in production over HTTP.
+
+Cause:
+- In production, cookies default to `Secure=true`.
+- Secure cookies are not sent over plain HTTP, so the browser never includes the
+  `access_token` cookie on subsequent requests.
+
+Fix (HTTP + production):
+1) Ensure `COOKIE_SECURE=false` in `.env.docker.api.prod`:
+```bash
+sed -i.bak 's/^COOKIE_SECURE=.*/COOKIE_SECURE=false/' /home/gandalf/Projects/home-video-monorepo/.env.docker.api.prod
+```
+
+2) Pull the latest code change that respects `COOKIE_SECURE=false` in production:
+```bash
+cd /home/gandalf/Projects/home-video-monorepo
+git pull
+```
+
+3) Rebuild/recreate containers:
+```bash
+docker compose --profile prod up --build -d --force-recreate
+```
+
+Verification:
+- Login in the browser and open DevTools → Network → request headers.
+- Confirm the cookie `access_token` is being sent on `/videos` calls.
+
+Notes:
+- If/when you enable HTTPS, switch `COOKIE_SECURE=true`.

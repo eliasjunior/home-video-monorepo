@@ -51,6 +51,10 @@ If the FE is still calling `localhost`, update the **correct** env file and rest
    - Ensure `COOKIE_SECURE=false` and `COOKIE_SAMESITE=Lax` for local HTTP.
    - Make sure FE and API are accessed with the **same host** (IP vs localhost).
 
+4. 401 after login in HTTP production
+   - Cause: `NODE_ENV=production` defaults secure cookies to `true`.
+   - Fix: Set `COOKIE_SECURE=false` when running HTTP (no HTTPS), or move to HTTPS and set it to `true`.
+
 Frontend dev server:
 - Default: `http://localhost:3000`
 

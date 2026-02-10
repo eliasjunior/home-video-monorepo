@@ -52,9 +52,12 @@ export default function config() {
   result.imagePort = IMAGES_PORT_SERVER;
   result.imageMapFileName = IMAGE_MAP;
   result.imageMapEnabled = IMAGE_MAP_ENABLED;
-  result.cookieSecure =
-    String(COOKIE_SECURE || "").toLowerCase() === "true" ||
-    process.env.NODE_ENV === "production";
+  const cookieSecureRaw = String(COOKIE_SECURE || "").toLowerCase();
+  if (cookieSecureRaw === "true" || cookieSecureRaw === "false") {
+    result.cookieSecure = cookieSecureRaw === "true";
+  } else {
+    result.cookieSecure = process.env.NODE_ENV === "production";
+  }
   const sameSite = String(COOKIE_SAMESITE || "lax").toLowerCase();
   result.cookieSameSite =
     sameSite === "lax" || sameSite === "strict" || sameSite === "none"
