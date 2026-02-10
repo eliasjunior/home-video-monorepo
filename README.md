@@ -6,6 +6,10 @@ This repo contains:
 - `apps/web`: React frontend
 - `apps/api`: Node.js backend
 
+## High-Level Overview
+
+Home Video is a small self-hosted web app for streaming personal videos over your local network, built as a learning project rather than a full media server. The Node.js backend discovers and streams files from a simple folder structure (movies/series/images/subtitles), while the React frontend provides a responsive UI for browsing, searching, and playback. It’s intended to run on a local machine (e.g., a spare PC or Raspberry Pi) with explicit env-based configuration for IP and media paths.
+
 ## Quick Start (Local Dev)
 
 Install dependencies:
