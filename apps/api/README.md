@@ -44,6 +44,40 @@ Notes:
 - `VIDEO_PATH` is still supported for backward compatibility.
 - If `VIDEO_SOURCE_PROFILE` points to a path that is not set, the API falls back to the local path.
 
+### Google Drive Source (via `rclone`)
+
+The API does not call Google Drive APIs directly. It reads local filesystem paths, so Google Drive must be mounted first (for example with `rclone mount`), then referenced by env vars.
+
+For Docker on Raspberry Pi, use container path values:
+```env
+VIDEO_SOURCE_PROFILE=gdrive
+VIDEO_PATH=/mnt-host/gdrive-videos
+VIDEO_PATH_GDRIVE=/mnt-host/gdrive-videos
+MOVIES_DIR=Movies
+SERIES_DIR=Series
+```
+
+And bind mount host path in compose (`api` service):
+```yaml
+volumes:
+  - /mnt:/mnt-host:ro
+```
+
+Important:
+- Mount Drive with read-only + allow-other:
+  ```bash
+  rclone mount gdrive: /mnt/gdrive-videos --daemon --read-only --allow-other --vfs-cache-mode full
+  ```
+- Ensure `/etc/fuse.conf` contains `user_allow_other`.
+- If mount is under `/home/<user>/...`, container path traversal may fail with permission errors.
+
+Media layout requirement for movies:
+```text
+<VIDEO_PATH>/Movies/<MovieFolder>/<videoFile>
+```
+
+If your files are directly under `Movies` (no `<MovieFolder>`), API returns "No videos were found".
+
 JWT settings (required for auth):
 
 ```env

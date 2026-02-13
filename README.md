@@ -75,6 +75,86 @@ docker run --rm -p 8080:8080 \
 
 See Troubleshooting for Raspberry Pi issue patterns and fixes.
 
+### Google Drive (Raspberry Pi + Docker)
+
+This project can read videos from Google Drive by mounting Drive with `rclone` and exposing the mount to the API container.
+
+#### 1) Configure `rclone` remote
+
+Run on Pi:
+```bash
+rclone config
+```
+
+Notes:
+- Use remote type `drive` (Google Drive), not `onedrive`.
+- If running via SSH/headless, choose `Use auto config?` = `n` and complete auth using:
+  - `rclone authorize "drive" "TOKEN_HERE"` on a machine with browser.
+
+#### 2) Mount Drive read-only
+
+One-time (allow cross-user access for Docker):
+```bash
+sudo sh -c 'grep -q "^user_allow_other" /etc/fuse.conf || echo user_allow_other >> /etc/fuse.conf'
+```
+
+Mount:
+```bash
+sudo mkdir -p /mnt/gdrive-videos
+sudo chown home-user:home-user /mnt/gdrive-videos
+rclone mount gdrive: /mnt/gdrive-videos \
+  --daemon \
+  --read-only \
+  --allow-other \
+  --vfs-cache-mode full \
+  --poll-interval 5m \
+  --dir-cache-time 30m
+```
+
+Verify on host:
+```bash
+mount | grep gdrive-videos
+ls -la /mnt/gdrive-videos
+```
+
+#### 3) Docker + env wiring
+
+In `docker-compose.yml` (`api` service), bind host mount into container:
+```yaml
+volumes:
+  - /mnt:/mnt-host:ro
+```
+
+In `.env.docker.api.prod`:
+```env
+VIDEO_SOURCE_PROFILE=gdrive
+VIDEO_PATH=/mnt-host/gdrive-videos
+VIDEO_PATH_GDRIVE=/mnt-host/gdrive-videos
+MOVIES_DIR=Movies
+SERIES_DIR=Series
+```
+
+Recreate:
+```bash
+docker compose --profile prod down
+docker compose --profile prod up -d --build api web
+```
+
+Verify inside API container:
+```bash
+docker compose --profile prod exec api sh -lc 'ls -la /mnt-host/gdrive-videos && ls -la /mnt-host/gdrive-videos/Movies'
+```
+
+#### 4) Required media layout
+
+Current backend movie scanner expects:
+```text
+<VIDEO_PATH>/Movies/<MovieFolder>/<videoFile>
+```
+
+If files are directly under `Movies` (flat layout), API returns:
+- `No videos were found. Expected movies under .../Movies/<MovieFolder>/<videoFile>.`
+
 ## Troubleshooting
 
 1. FE calls `localhost` instead of IP
@@ -107,7 +187,7 @@ Fix: escape `$` as `$$` in `.env.docker`, or move the hash into a Docker secret.
 1. Fix API volume mount to the Pi path
    - In `docker-compose.yml` (prod `api`), change:
      - `- <your-path>:/videos`
-     - to `- /home/gandalf/Videos:/videos`
+     - to `- /home/home-user/Videos:/videos`
 
 2. Fix web container port mapping
    - The web container uses nginx (listens on `80` internally).
@@ -117,13 +197,13 @@ Fix: escape `$` as `$$` in `.env.docker`, or move the hash into a Docker secret.
 
 3. Ensure video folder structure exists on the Pi
    ```bash
-   mkdir -p /home/gandalf/Videos/Movies/TestMovie
-   mkdir -p /home/gandalf/Videos/Series
+   mkdir -p /home/home-user/Videos/Movies/TestMovie
+   mkdir -p /home/home-user/Videos/Series
    ```
 
 4. Recreate containers to apply changes
    ```bash
-   cd /home/gandalf/Projects/home-video-monorepo
+   cd /home/home-user/Projects/home-video-monorepo
    docker compose --profile prod up --build -d --force-recreate
    ```
 
@@ -147,8 +227,41 @@ Fix: escape `$` as `$$` in `.env.docker`, or move the hash into a Docker secret.
 #### Automation (TODO)
 - Use the Pi script below to run all checks and fixes above (paths, ports, folders, rebuild, verify):
   ```bash
-  /home/gandalf/Projects/home-video-monorepo/scripts/pi-troubleshoot.sh
+  /home/home-user/Projects/home-video-monorepo/scripts/pi-troubleshoot.sh
   ```
+
+### Google Drive + rclone Troubleshooting
+
+1. `didn't find section in config file`
+   - Cause: using wrong remote name.
+   - Fix: check with `rclone listremotes`, then use the correct one (for example `gdrive:`).
+
+2. `unauthorized_client` / `couldn't fetch token`
+   - Cause: OAuth client/token mismatch or invalid OAuth setup.
+   - Fix:
+     - `rclone config reconnect gdrive:`
+     - Ensure type is `drive`
+     - If needed, recreate remote with `rclone config`.
+
+3. `Daemon timed out` on `rclone mount --daemon`
+   - Cause: hidden mount error in background mode.
+   - Fix: run foreground first:
+     ```bash
+     rclone mount gdrive: /mnt/gdrive-videos --read-only --vfs-cache-mode full -vv
+     ```
+
+4. `Permission denied` from container on mounted folder
+   - Cause: FUSE mount not accessible to container context.
+   - Fix:
+     - enable `user_allow_other` in `/etc/fuse.conf`
+     - mount with `--allow-other`
+     - prefer `/mnt/...` over `/home/...` for Docker bind.
+
+5. API says `.../Movies does not exist or cannot access it`
+   - Cause: wrong container path or volume mapping.
+   - Fix:
+     - container should read `/mnt-host/gdrive-videos`
+     - compose should mount `/mnt:/mnt-host:ro`.
 
 ## Authentication Overview
 

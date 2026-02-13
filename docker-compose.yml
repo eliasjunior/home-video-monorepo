@@ -21,7 +21,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - /home/gandalf/Videos:/videos
+      - /home/gandalf/mnt:/mnt-host:ro
     secrets:
       - admin_password_hash
     profiles:
