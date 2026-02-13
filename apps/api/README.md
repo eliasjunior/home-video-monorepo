@@ -25,7 +25,7 @@ npm run docker:run
 Run with env + videos mounted:
 ```bash
 docker run --rm -p 8080:8080 \
-  --env-file .env.docker \
+  --env-file .env.development \
   -v /Users/eliasjunior/Downloads/Videos:/videos \
   home-video-api:dev
 ```
@@ -46,9 +46,14 @@ Notes:
 
 ### Google Drive Source (via `rclone`)
 
-The API does not call Google Drive APIs directly. It reads local filesystem paths, so Google Drive must be mounted first (for example with `rclone mount`), then referenced by env vars.
+The API does not call Google Drive APIs directly. It reads local filesystem paths.
 
-For Docker on Raspberry Pi, use container path values:
+Canonical setup guide (Pi + Docker + `rclone` + troubleshooting) lives in:
+- `/Users/eliasjunior/Projects/portfolio/home-video-monorepo/README.md` -> `Google Drive (Raspberry Pi + Docker)`
+
+API-specific requirements:
+
+For Docker on Raspberry Pi, API env should use container-visible paths:
 ```env
 VIDEO_SOURCE_PROFILE=gdrive
 VIDEO_PATH=/mnt-host/gdrive-videos
@@ -57,26 +62,19 @@ MOVIES_DIR=Movies
 SERIES_DIR=Series
 ```
 
-And bind mount host path in compose (`api` service):
+`docker-compose.yml` (`api` service) must bind:
 ```yaml
 volumes:
   - /mnt:/mnt-host:ro
 ```
 
-Important:
-- Mount Drive with read-only + allow-other:
-  ```bash
-  rclone mount gdrive: /mnt/gdrive-videos --daemon --read-only --allow-other --vfs-cache-mode full
-  ```
-- Ensure `/etc/fuse.conf` contains `user_allow_other`.
-- If mount is under `/home/<user>/...`, container path traversal may fail with permission errors.
-
-Media layout requirement for movies:
+Supported movie layouts:
 ```text
 <VIDEO_PATH>/Movies/<MovieFolder>/<videoFile>
+<VIDEO_PATH>/Movies/<videoFile>
 ```
 
-If your files are directly under `Movies` (no `<MovieFolder>`), API returns "No videos were found".
+Both folder-based and flat file layouts are supported.
 
 JWT settings (required for auth):
 

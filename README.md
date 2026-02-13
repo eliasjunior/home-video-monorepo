@@ -28,7 +28,9 @@ npm run dev
 
 Which env file is used depends on how you run the FE:
 - **Non‑Docker dev** (CRA): `apps/web/.env.development`
-- **Docker dev** (compose): `.env.docker.dev`
+- **Docker dev** (compose):
+  - API: `.env.docker.api.dev`
+  - Web: `.env.docker.web.dev`
 
 If the FE is still calling `localhost`, update the **correct** env file and restart the dev server.
 
@@ -66,7 +68,7 @@ Run API image with env + videos mounted:
 ```bash
 cd apps/api
 docker run --rm -p 8080:8080 \
-  --env-file .env.docker \
+  --env-file .env.development \
   -v <your-path>:/videos \
   home-video-api:dev
 ```
@@ -78,6 +80,8 @@ See Troubleshooting for Raspberry Pi issue patterns and fixes.
 ### Google Drive (Raspberry Pi + Docker)
 
 This project can read videos from Google Drive by mounting Drive with `rclone` and exposing the mount to the API container.
+
+Replace `home-user` below with your actual Linux username.
 
 #### 1) Configure `rclone` remote
 
@@ -147,13 +151,11 @@ docker compose --profile prod exec api sh -lc 'ls -la /mnt-host/gdrive-videos &&
 
 #### 4) Required media layout
 
-Current backend movie scanner expects:
+Current backend movie scanner supports both:
 ```text
 <VIDEO_PATH>/Movies/<MovieFolder>/<videoFile>
+<VIDEO_PATH>/Movies/<videoFile>
 ```
-
-If files are directly under `Movies` (flat layout), API returns:
-- `No videos were found. Expected movies under .../Movies/<MovieFolder>/<videoFile>.`
 
 ## Troubleshooting
 
@@ -176,6 +178,9 @@ Cause: `$` in hash is treated as env interpolation.
 Fix: escape `$` as `$$` in `.env.docker`, or move the hash into a Docker secret.
 
 ### Raspberry Pi (Prod)
+
+Legacy note: this section describes local-disk video mounting (`/videos`) before Google Drive support.  
+If you are using Google Drive + `rclone`, follow the "Google Drive (Raspberry Pi + Docker)" section above.
 
 #### Symptoms we hit
 - FE loads, but API errors like `GET https://localhost:8080/health net::ERR_SSL_PROTOCOL_ERROR`
@@ -262,6 +267,10 @@ Fix: escape `$` as `$$` in `.env.docker`, or move the hash into a Docker secret.
    - Fix:
      - container should read `/mnt-host/gdrive-videos`
      - compose should mount `/mnt:/mnt-host:ro`.
+
+6. Placeholder paths/usernames in docs
+   - `home-user` is a placeholder.
+   - Replace `/home/home-user/...` with your real username/home path.
 
 ## Authentication Overview
 

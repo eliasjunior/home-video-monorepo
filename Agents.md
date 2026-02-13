@@ -43,4 +43,11 @@ Agents must:
 - The app is expected to **run locally** after every change.
 - Backend authentication uses **JWT access + refresh tokens**.
 
+---
+
+## Next Steps (Agreed)
+
+1. Add an `rclone` `systemd` service on Raspberry Pi so Google Drive mount starts automatically on reboot.
+2. Add a backend guard for flat movie ID collisions (same basename) to avoid ambiguous entries.
+3. Open and track a PR including backend changes + documentation updates for reproducibility.
 
