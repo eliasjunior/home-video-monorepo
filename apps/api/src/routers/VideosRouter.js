@@ -172,7 +172,12 @@ function loadShow(req, response) {
 }
 function streamingVideo(request, response) {
   const { folder, fileName } = request.params;
-  const fileAbsPath = `${moviesAbsPath}/${folder}/${fileName}`;
+  const movieMap = getMovieMap();
+  const media = movieMap.byId[folder];
+  const fileAbsPath =
+    media && media.isFlat
+      ? `${moviesAbsPath}/${fileName}`
+      : `${moviesAbsPath}/${folder}/${fileName}`;
   doStreaming({ request, response, fileAbsPath });
 }
 

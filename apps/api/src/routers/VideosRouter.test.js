@@ -272,6 +272,41 @@ describe("VideosRouter", () => {
     expect(response.body).toHaveProperty("message");
   });
 
+  it("GET /videos/:folder/:fileName streams flat movie file when id points to flat layout", async () => {
+    const authHeader = await getAuthHeader(app);
+    const { setMovieMap } = require("../common/Util");
+    setMovieMap({
+      byId: {
+        FlatMovie: {
+          id: "FlatMovie",
+          name: "FlatMovie.mp4",
+          isFlat: true,
+        },
+      },
+      allIds: ["FlatMovie"],
+    });
+    dataAccess.getFileDirInfo.mockImplementation((fileAbsPath) => {
+      if (fileAbsPath.endsWith("/Movies/FlatMovie/FlatMovie.mp4")) {
+        throw new Error("nested path does not exist");
+      }
+      if (fileAbsPath.endsWith("/Movies/FlatMovie.mp4")) {
+        return { size: 0 };
+      }
+      throw new Error(`unexpected path: ${fileAbsPath}`);
+    });
+    streamingData.createStream.mockReturnValueOnce({ on: jest.fn() });
+    streamingUtil.streamEvents.mockImplementationOnce(({ outputWriter }) => {
+      outputWriter.end();
+    });
+
+    const response = await request(app)
+      .get("/videos/FlatMovie/FlatMovie.mp4")
+      .set("Authorization", authHeader);
+
+    expect(response.status).toBe(200);
+    expect(streamingUtil.streamEvents).toHaveBeenCalled();
+  });
+
   it("GET /series/:id returns 501 when show is missing", async () => {
     const authHeader = await getAuthHeader(app);
     dataAccess.getVideo.mockReturnValueOnce(null);

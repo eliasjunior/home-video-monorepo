@@ -29,6 +29,17 @@ function createTempProject({ withVideos = true, withSeries = true }) {
   return baseDir;
 }
 
+function createTempProjectWithFlatMovies() {
+  const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "home-video-flat-"));
+  const moviesDir = path.join(baseDir, "Movies");
+  const seriesDir = path.join(baseDir, "Series");
+  fs.mkdirSync(moviesDir, { recursive: true });
+  fs.mkdirSync(seriesDir, { recursive: true });
+  fs.writeFileSync(path.join(moviesDir, "FlatMovie.mp4"), "");
+  fs.writeFileSync(path.join(moviesDir, "FlatMovie.srt"), "");
+  return baseDir;
+}
+
 function buildAppWithEnv(baseDir) {
   process.env.NODE_ENV = "test";
   process.env.SERVER_PROTOCOL = "http";
@@ -91,6 +102,20 @@ describe("VideosRouter integration", () => {
 
     const response = await request(app)
       .get("/series")
+      .set("Authorization", authHeader);
+
+    expect(response.status).toBe(200);
+    expect(response.body.allIds.length).toBe(1);
+  });
+
+  it("GET /videos returns 200 when movies are flat files under Movies", async () => {
+    const baseDir = createTempProjectWithFlatMovies();
+    tempDirs.push(baseDir);
+    const app = buildAppWithEnv(baseDir);
+    const authHeader = await getAuthHeader(app);
+
+    const response = await request(app)
+      .get("/videos")
       .set("Authorization", authHeader);
 
     expect(response.status).toBe(200);

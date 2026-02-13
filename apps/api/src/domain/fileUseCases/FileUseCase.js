@@ -92,10 +92,36 @@ export default function FileUseCase({ FileApi }) {
           prev.allIds.push(media.id);
           return prev;
         };
-        return allFolders
+        const foldersTable = allFolders
           .filter(onlyFolderWithValidFiles)
           .filter(isThereAVideoInFolder)
           .reduce(buildUpFoldersTable, { byId: {}, allIds: [] });
+        const topLevelFiles = readDirectory(baseLocation)
+          .filter((item) => !item.isDirectory())
+          .map((item) => item.name);
+        const validTopLevelFiles = filterValidFiles(topLevelFiles, fileExtEqual);
+        const topLevelVideoFiles = validTopLevelFiles.filter((fileName) =>
+          isThereVideoFile(fileName, fileExtEqual)
+        );
+        topLevelVideoFiles.forEach((videoName) => {
+          const fileExt = fileExtEqual(videoName);
+          const id = videoName.slice(0, videoName.length - fileExt.length);
+          if (foldersTable.byId[id]) {
+            return;
+          }
+          const siblingFiles = validTopLevelFiles.filter((fileName) =>
+            fileName.startsWith(`${id}.`)
+          );
+          const media = mapMedia({
+            files: siblingFiles,
+            folderName: id,
+            fileExtEqual,
+          });
+          media.isFlat = true;
+          foldersTable.byId[id] = media;
+          foldersTable.allIds.push(id);
+        });
+        return foldersTable;
       } else {
         return { byId: {}, allIds: [] };
       }

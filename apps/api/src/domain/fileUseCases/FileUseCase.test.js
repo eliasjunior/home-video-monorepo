@@ -50,6 +50,19 @@ describe("FileUseCase (integration-lite)", () => {
     expect(result.byId.MovieA.name).toBe("MovieA.mp4");
   });
 
+  it("returns videos when Movies contains flat files (no parent folder)", () => {
+    const moviesDir = path.join(baseDir, "Movies");
+    fs.mkdirSync(moviesDir, { recursive: true });
+    fs.writeFileSync(path.join(moviesDir, "FlatMovie.mp4"), "");
+    fs.writeFileSync(path.join(moviesDir, "FlatMovie.srt"), "");
+
+    const result = fileUseCase.getVideos({ baseLocation: moviesDir });
+
+    expect(result.allIds.length).toBe(1);
+    const [id] = result.allIds;
+    expect(result.byId[id].name).toBe("FlatMovie.mp4");
+  });
+
   it("builds series list and includes season folders", () => {
     const seriesDir = path.join(baseDir, "Series");
     const showDir = path.join(seriesDir, "ShowA");
