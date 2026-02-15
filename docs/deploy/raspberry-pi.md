@@ -1,6 +1,13 @@
 # Raspberry Pi Deployment
 
+[Back to docs index](../README.md)
+
+
 This page covers Docker-based production deployment on Raspberry Pi.
+
+For a minimal manual run (no bootstrap/scripts/services), use:
+
+- [Pi basic startup (manual)](pi-basic-startup.md)
 
 For fresh machine provisioning and reboot-safe startup, use:
 

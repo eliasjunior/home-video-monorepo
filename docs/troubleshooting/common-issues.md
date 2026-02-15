@@ -1,5 +1,8 @@
 # Common Issues
 
+[Back to docs index](../README.md)
+
+
 ## Frontend Calls `localhost` Instead of LAN IP
 
 Cause:

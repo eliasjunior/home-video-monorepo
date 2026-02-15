@@ -1,5 +1,8 @@
 # Authentication
 
+[Back to docs index](../README.md)
+
+
 ## Overview
 
 This project uses JWT access and refresh tokens.

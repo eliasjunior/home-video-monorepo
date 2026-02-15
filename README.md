@@ -33,6 +33,7 @@ npm run dev
 
 - Monorepo docs index: [`docs/README.md`](docs/README.md)
 - Local dev: [`docs/setup/local-dev.md`](docs/setup/local-dev.md)
+- Raspberry Pi basic startup (manual): [`docs/deploy/pi-basic-startup.md`](docs/deploy/pi-basic-startup.md)
 - Raspberry Pi deploy: [`docs/deploy/raspberry-pi.md`](docs/deploy/raspberry-pi.md)
 - Google Drive + `rclone`: [`docs/storage/google-drive-rclone.md`](docs/storage/google-drive-rclone.md)
 - Backend media scanning: [`docs/backend/media-scanning.md`](docs/backend/media-scanning.md)

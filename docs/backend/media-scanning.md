@@ -1,5 +1,8 @@
 # Backend Media Scanning
 
+[Back to docs index](../README.md)
+
+
 ## Supported Layouts
 
 Movie scanner supports both:

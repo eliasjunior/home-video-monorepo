@@ -2,6 +2,8 @@
 
 # Home Video UI
 
+[Back to root README](../../README.md)
+
 ## What is it ?
 
 - It's react basic app to play videos reading from a streaming API [`Home Video API`](https://github.com/eliasjunior/home-video-api)
@@ -23,4 +25,3 @@ Install the dependencies
 See `package.json` to available scripts
 
 [base docs](https://github.com/eliasjunior/home-video-docs)
-
