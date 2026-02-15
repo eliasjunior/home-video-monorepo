@@ -15,6 +15,7 @@ if (process.env.NODE_ENV === "development") {
 
 export default function config() {
   const {
+    SERVER_HOST,
     SERVER_PORT,
     IMG_FOLDER_FALL_BACK,
     VIDEO_PATH,
@@ -40,7 +41,11 @@ export default function config() {
 
   result.protocol = SERVER_PROTOCOL;
   result.port = SERVER_PORT;
-  result.host = getLocalIPAddress();
+  const explicitHost = (SERVER_HOST || "").trim();
+  result.host =
+    process.env.NODE_ENV === "production" && explicitHost
+      ? explicitHost
+      : getLocalIPAddress();
   // in case you want read the images/posters from the another folder.
   result.imgFolderFallBack = IMG_FOLDER_FALL_BACK;
   const normalizedProfile = String(VIDEO_SOURCE_PROFILE || "local")
@@ -63,8 +68,9 @@ export default function config() {
   result.seriesDir = SERIES_DIR;
   result.baseLocation = os.homedir();
   result.serverUrl = `${result.protocol}://${result.host}:${result.port}`;
-  result.imageFallbackBaseUrl =
+  const fallbackBaseCandidate =
     IMAGE_FALLBACK_BASE_URL || `${result.serverUrl}/public`;
+  result.imageFallbackBaseUrl = normalizeFallbackBaseUrl(fallbackBaseCandidate);
   //NGINX and it's not the images url in the AppServerConstant that has /images
   result.imageServerHost = result.host;
   result.imagePort = IMAGES_PORT_SERVER;
@@ -86,6 +92,22 @@ export default function config() {
 
   logD("config result", result);
   return result;
+}
+
+function normalizeFallbackBaseUrl(value) {
+  const normalized = String(value || "").trim().replace(/\/$/, "");
+  if (!normalized) {
+    return normalized;
+  }
+  if (normalized.includes("movie_fallback.png")) {
+    const corrected = normalized.replace(/\/movie_fallback\.png$/i, "");
+    console.warn(
+      "IMAGE_FALLBACK_BASE_URL should not include movie_fallback.png. " +
+        `Using corrected base URL: ${corrected || normalized}`
+    );
+    return corrected || normalized;
+  }
+  return normalized;
 }
 
 function getLocalIPAddress() {

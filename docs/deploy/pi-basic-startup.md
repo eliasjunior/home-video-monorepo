@@ -64,9 +64,9 @@ Use this when you want only the basics to get the app running now.
 - [ ] Run preflight for manual prod startup:
   - `./scripts/pi/preflight-prod.sh`
 - [ ] Start app manually:
-  - `docker compose --profile prod up -d --build api web`
+  - `docker compose --env-file .env.docker.web.prod --profile prod up -d --build api web`
 - [ ] Verify app:
-  - `docker compose --profile prod ps`
+  - `docker compose --env-file .env.docker.web.prod --profile prod ps`
   - `curl -I http://localhost:3000`
   - open `http://<PI_IP>:3000`
 
@@ -75,6 +75,7 @@ Use this when you want only the basics to get the app running now.
 - Without `systemd`, the `rclone mount` is not persistent on reboot.
 - Keep the terminal/session running where `rclone mount` is running, or remount manually after restart.
 - Preflight validates `secrets/admin_password_hash` and checks bcrypt format.
+- Use `--env-file .env.docker.web.prod` on prod compose commands so web build args are loaded correctly.
 
 ## Auth Notes (Why This Secret File Exists)
 
@@ -107,6 +108,16 @@ create it with one of the commands above, then run:
 - Restrict secret access by least privilege.
 - Rotate secrets periodically and after incidents.
 - Avoid storing secrets in git-tracked files or plaintext env files.
+
+## Config Invariants (Avoid Broken Fallback/localhost URLs)
+
+- `.env.docker.api.prod`:
+  - `IMAGE_FALLBACK_BASE_URL` must be base-only, for example:
+    - `http://<PI_IP>:8080/public`
+  - Do not include `movie_fallback.png` in this value.
+- `.env.docker.web.prod`:
+  - `REACT_APP_SERVER_HOST` must be your Pi LAN IP (not `localhost`).
+  - `REACT_APP_SERVER_PROTOCOL` must be `http` or `https`.
 
 ## Next Step (Optional)
 

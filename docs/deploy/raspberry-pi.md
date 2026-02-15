@@ -18,8 +18,8 @@ For fresh machine provisioning and reboot-safe startup, use:
 Recreate prod services after config changes:
 
 ```bash
-docker compose --profile prod down
-docker compose --profile prod up -d --build api web
+docker compose --env-file .env.docker.web.prod --profile prod down
+docker compose --env-file .env.docker.web.prod --profile prod up -d --build api web
 ```
 
 ## Web Port Mapping

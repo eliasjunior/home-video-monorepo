@@ -27,9 +27,10 @@ cd "$REPO_ROOT"
 
 echo "Building and starting prod services..."
 # Retry helps with transient image pull/build network failures.
-retry "$RETRY_MAX" "$RETRY_DELAY_SECONDS" docker compose --profile prod up -d --build api web
+retry "$RETRY_MAX" "$RETRY_DELAY_SECONDS" \
+  docker compose --env-file .env.docker.web.prod --profile prod up -d --build api web
 
 echo
 echo "Services started. Quick checks:"
-echo "  docker compose --profile prod ps"
+echo "  docker compose --env-file .env.docker.web.prod --profile prod ps"
 echo "  curl -I http://localhost:3000"

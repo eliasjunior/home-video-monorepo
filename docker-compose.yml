@@ -47,6 +47,9 @@ services:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
+      args:
+        REACT_APP_SERVER_HOST: ${REACT_APP_SERVER_HOST}
+        REACT_APP_SERVER_PROTOCOL: ${REACT_APP_SERVER_PROTOCOL}
     env_file:
       - ./.env.docker.web.prod
     ports:
