@@ -24,9 +24,24 @@ if [[ "$(uname -s)" != "Linux" ]]; then
 fi
 
 echo "Running prod preflight checks..."
-require_cmd docker
-require_cmd npm
-require_cmd grep
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Missing required command: docker"
+  echo "Install with: sudo apt-get update && sudo apt-get install -y docker.io docker-compose-plugin"
+  exit 1
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+  echo "Missing required command: npm"
+  echo "Install with: sudo apt-get update && sudo apt-get install -y npm"
+  echo "Or install with nodejs together: sudo apt-get update && sudo apt-get install -y nodejs npm"
+  exit 1
+fi
+
+if ! command -v grep >/dev/null 2>&1; then
+  echo "Missing required command: grep"
+  echo "Install with: sudo apt-get update && sudo apt-get install -y grep"
+  exit 1
+fi
 
 if ! docker compose version >/dev/null 2>&1; then
   echo "docker compose plugin is not available."

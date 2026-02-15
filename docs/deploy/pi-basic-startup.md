@@ -53,10 +53,16 @@ Use this when you want only the basics to get the app running now.
   - `ls -la /mnt/gdrive-videos`
   - `ls -la /mnt/gdrive-videos/Movies`
   - `ls -la /mnt/gdrive-videos/Series`
+- [ ] Generate admin bcrypt hash secret (required for login):
+  - automatic via preflight:
+    - `ADMIN_PASSWORD_PLAIN="<strong-password>" ./scripts/pi/preflight-prod.sh`
+  - manual (explicit bcrypt generation):
+    - `mkdir -p secrets`
+    - `npm --prefix apps/api ci`
+    - `npm --prefix apps/api run -s hash:password -- "<strong-password>" > secrets/admin_password_hash`
+    - `chmod 600 secrets/admin_password_hash`
 - [ ] Run preflight for manual prod startup:
   - `./scripts/pi/preflight-prod.sh`
-  - If secret is missing, auto-generate it with:
-    - `ADMIN_PASSWORD_PLAIN="<strong-password>" ./scripts/pi/preflight-prod.sh`
 - [ ] Start app manually:
   - `docker compose --profile prod up -d --build api web`
 - [ ] Verify app:
@@ -79,6 +85,18 @@ Use this when you want only the basics to get the app running now.
   - `secrets/admin_password_hash`
 - This file is mounted into the API container as:
   - `/run/secrets/admin_password_hash`
+
+If preflight prints:
+
+```text
+Missing secret file: .../secrets/admin_password_hash
+```
+
+create it with one of the commands above, then run:
+
+```bash
+./scripts/pi/preflight-prod.sh
+```
 
 ### Proper Production Scenario
 
