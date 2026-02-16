@@ -6,8 +6,8 @@ This repository is the monorepo version of the project and contains the current 
 
 ## Project Structure
 
-- `apps/web`: React frontend
-- `apps/api`: Node.js backend
+- `apps/web`: React frontend (SPA)
+- `apps/api`: Node.js backend (Express)
 - `docs`: Monorepo documentation
 
 ## Quick Start (Local Dev)
@@ -18,7 +18,7 @@ Install dependencies:
 npm install
 ```
 
-Run both apps:
+Run both apps in development mode:
 
 ```bash
 npm run dev
@@ -26,8 +26,89 @@ npm run dev
 
 ## Service URLs
 
-- Frontend dev server: `http://localhost:3000`
-- API: `http://localhost:8080`
+- **Development:**
+  - Frontend dev server: `http://localhost:3000`
+  - API: `http://localhost:8080`
+
+- **Production (merged app):**
+  - Single app serving both frontend and API: `http://localhost:8081` (configurable via `SERVER_PORT`)
+
+## Deployment
+
+### Docker Compose (Production)
+
+The production setup runs both API and Web as a single merged application:
+
+```bash
+# Build and start
+docker-compose --profile prod up --build -d
+
+# View logs
+docker logs home-video-app
+
+# Stop
+docker-compose --profile prod down
+```
+
+### Configuration
+
+The application uses environment variables for configuration. Key settings in `.env.docker.api.prod`:
+
+**Server:**
+```bash
+SERVER_PORT=8081                # Server port
+VIDEO_PATH=/mnt-host           # Path to video files
+MOVIES_DIR=Movies              # Movies subdirectory
+SERIES_DIR=Series              # Series subdirectory
+```
+
+**Authentication:**
+```bash
+# JWT (Default)
+JWT_ACCESS_SECRET=your-secret
+JWT_REFRESH_SECRET=your-secret
+JWT_ACCESS_TTL=15m
+JWT_REFRESH_TTL=180d
+
+# JWKS Validation (for external auth services)
+JWKS_VALIDATION=false
+JWKS_URL=http://auth-service:8080/.well-known/jwks.json
+
+# Spring Session SSO (for multi-app authentication)
+SSO_REDIS_ENABLED=false
+USE_SPRING_SESSION=false
+REDIS_HOST=localhost
+REDIS_PORT=6379
+SESSION_COOKIE_NAME=SESSION
+
+# Login Second Retry (fallback to external auth service)
+LOGIN_SECOND_RETRY=false
+LOGIN_SECOND_RETRY_URL=http://auth-service:8080/api/authenticate
+```
+
+See `.env.docker.api.prod` for all available options.
+
+## Features
+
+### Authentication Methods
+
+The application supports multiple authentication methods:
+
+1. **JWT Authentication** - Default method using access and refresh tokens
+2. **JWKS Validation** - Validates tokens from external auth services (supports both symmetric and asymmetric keys)
+3. **Spring Session SSO** - Integrates with Spring Boot applications via Redis-backed sessions
+4. **Login Second Retry** - Falls back to external authentication service if local validation fails
+   - Configurable via `LOGIN_SECOND_RETRY` environment variable
+   - POSTs credentials to external service and extracts token from response headers
+   - Useful for hybrid authentication scenarios
+
+### Merged Application
+
+In production, the API serves both the REST endpoints and the React frontend as a single application:
+- Single Docker container
+- Simplified deployment
+- Shared session management
+- Reduced infrastructure complexity
 
 ## Documentation
 

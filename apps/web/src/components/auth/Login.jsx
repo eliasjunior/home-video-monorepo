@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useHistory } from "react-router-dom";
 import "./login.css";
-import { login } from "services/auth";
+import { login, checkAuthentication } from "services/auth";
 
 export default function Login() {
   const history = useHistory();
@@ -10,6 +10,26 @@ export default function Login() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Check if user is already authenticated on component mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const result = await checkAuthentication();
+        if (result.authenticated) {
+          // User is already authenticated, redirect to home
+          history.push("/");
+        }
+      } catch (err) {
+        // If check fails, just show login form
+        console.error("Auth check failed:", err);
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+    checkAuth();
+  }, [history]);
 
   const onSubmit = async (ev) => {
     ev.preventDefault();
@@ -28,6 +48,17 @@ export default function Login() {
       setIsSubmitting(false);
     }
   };
+
+  // Show loading state while checking authentication
+  if (isCheckingAuth) {
+    return (
+      <div className="login">
+        <div className="login-card">
+          <p>Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="login">

@@ -11,50 +11,35 @@ services:
     profiles:
       - dev
 
-  api:
+  app:
+    container_name: home-video-app
     build:
-      context: ./apps/api
+      context: ./apps
+      dockerfile: ./api/Dockerfile
     env_file:
       - ./.env.docker.api.prod
     environment:
       - ADMIN_PASSWORD_HASH_FILE=/run/secrets/admin_password_hash
+      - SERVER_PORT=8081
+      - JWKS_URL=http://host.docker.internal:8080/.well-known/jwks.json
+      - DEBUG=jwt,redis,web
+      - SSO_REDIS_ENABLED=true
+      - USE_SPRING_SESSION=true
+      - REDIS_HOST=host.docker.internal
+      - JWKS_VALIDATION=true
+      - SESSION_COOKIE_NAME=SESSIONID
+      - LOGIN_SECOND_RETRY=true
+      - LOGIN_SECOND_RETRY_URL=http://host.docker.internal:8080/api/authenticate
     ports:
-      - "8080:8080"
+      - "8081:8081"
     volumes:
-      - /mnt:/mnt-host:ro
+      - /Users/rodrigo/Downloads/Videos:/mnt-host:ro
     secrets:
       - admin_password_hash
     profiles:
       - prod
-
-  web-dev:
-    build:
-      context: ./apps/web
-      dockerfile: Dockerfile.dev
-    env_file:
-      - ./.env.docker.web.dev
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./apps/web:/app
-      - /app/node_modules
-    depends_on:
-      - api-dev
-    profiles:
-      - dev
-
-  web:
-    build:
-      context: ./apps/web
-      dockerfile: Dockerfile
-    env_file:
-      - ./.env.docker.web.prod
-    ports:
-      - "3000:80"
-    depends_on:
-      - api
-    profiles:
-      - prod
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 secrets:
   admin_password_hash:

@@ -28,12 +28,12 @@ describe("tokenService", () => {
     expect(refreshExpiresAtMs).toBeGreaterThan(Date.now());
   });
 
-  it("verifies access token", () => {
+  it("verifies access token", async () => {
     const accessToken = jwt.sign({ sub: "user-1", username: "admin" }, "access-secret", {
       expiresIn: "15m",
     });
 
-    const payload = verifyAccessToken(accessToken);
+    const payload = await verifyAccessToken(accessToken);
 
     expect(payload.sub).toBe("user-1");
   });
