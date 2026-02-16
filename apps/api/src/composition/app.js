@@ -34,7 +34,13 @@ export function createApp({ appConfig, env = process.env } = {}) {
   const { fileService, streamService } = createMediaServices();
   const requireAuth = createRequireAuth({ tokenService });
 
-  app.use("/auth", createAuthRouter({ refreshTokenStore, tokenService }));
+  app.use(
+    "/auth",
+    createAuthRouter({
+      refreshTokenStore,
+      services: { tokenService },
+    })
+  );
 
   app.use((req, _res, next) => {
     if (req.path.startsWith("/public/")) return next();

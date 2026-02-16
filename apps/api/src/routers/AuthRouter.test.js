@@ -200,7 +200,7 @@ describe("AuthRouter", () => {
       "/auth",
       createAuthRouter({
         refreshTokenStore: injectedStore,
-        tokenService: injectedTokenService,
+        services: { tokenService: injectedTokenService },
       })
     );
 
