@@ -1,5 +1,7 @@
 # Home Video Documentation
 
+[Back to root README](../README.md)
+
 This directory is the canonical documentation for the monorepo.
 
 ## Overview
@@ -15,6 +17,8 @@ Home Video is a hobby/learning project focused on:
 
 - [Local development](setup/local-dev.md)
 - [Raspberry Pi deployment](deploy/raspberry-pi.md)
+- [Raspberry Pi basic startup (manual)](deploy/pi-basic-startup.md)
+- [Raspberry Pi one-click bootstrap](deploy/pi-one-click-bootstrap.md)
 - [Google Drive with `rclone`](storage/google-drive-rclone.md)
 - [Backend media scanning](backend/media-scanning.md)
 - [Authentication](auth/authentication.md)

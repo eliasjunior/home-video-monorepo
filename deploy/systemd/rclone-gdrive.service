@@ -1,0 +1,18 @@
+[Unit]
+Description=Rclone Google Drive Mount (Home Video)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=__PI_USER__
+Group=__PI_GROUP__
+Environment=HOME=__PI_HOME__
+ExecStartPre=/bin/mkdir -p __GDRIVE_MOUNT__
+ExecStart=/usr/bin/rclone mount __RCLONE_REMOTE__: __GDRIVE_MOUNT__ --config __RCLONE_CONFIG__ --read-only --allow-other --vfs-cache-mode full --poll-interval 5m --dir-cache-time 30m --umask 022
+ExecStop=/bin/umount -l __GDRIVE_MOUNT__
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -24,6 +24,16 @@ Run both apps in development mode:
 npm run dev
 ```
 
+## Quick Start (Raspberry Pi)
+
+For Raspberry Pi, start with the manual guide first (recommended):
+
+- [`docs/deploy/pi-basic-startup.md`](docs/deploy/pi-basic-startup.md)
+
+After manual startup is stable, move to one-click/bootstrap + services:
+
+- [`docs/deploy/pi-one-click-bootstrap.md`](docs/deploy/pi-one-click-bootstrap.md)
+
 ## Service URLs
 
 - **Development:**
@@ -114,6 +124,7 @@ In production, the API serves both the REST endpoints and the React frontend as 
 
 - Monorepo docs index: [`docs/README.md`](docs/README.md)
 - Local dev: [`docs/setup/local-dev.md`](docs/setup/local-dev.md)
+- Raspberry Pi basic startup (manual): [`docs/deploy/pi-basic-startup.md`](docs/deploy/pi-basic-startup.md)
 - Raspberry Pi deploy: [`docs/deploy/raspberry-pi.md`](docs/deploy/raspberry-pi.md)
 - Google Drive + `rclone`: [`docs/storage/google-drive-rclone.md`](docs/storage/google-drive-rclone.md)
 - Backend media scanning: [`docs/backend/media-scanning.md`](docs/backend/media-scanning.md)

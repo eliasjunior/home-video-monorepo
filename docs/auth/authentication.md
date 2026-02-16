@@ -1,5 +1,8 @@
 # Authentication
 
+[Back to root README](../../README.md)
+
+
 ## Overview
 
 This project uses JWT access and refresh tokens.
@@ -13,6 +16,23 @@ Default user (current simple setup):
 
 - username: `admin`
 - password: `password`
+
+## Current Simplification vs Proper Production
+
+Current project simplification:
+
+- Authentication is JWT-based.
+- Admin credentials are validated from a bcrypt hash that can be read from a file path:
+  - container path: `/run/secrets/admin_password_hash`
+  - compose source file: `secrets/admin_password_hash`
+- This keeps setup simple for self-hosted local/LAN deployments.
+
+Proper production scenario:
+
+- Terminate TLS and serve API/SPA over HTTPS.
+- Use secure cookies (`COOKIE_SECURE=true`) in HTTPS.
+- Store JWT secrets and admin credential hash in a managed secret system (not git-tracked files).
+- Enforce least-privilege access to secrets and rotate them regularly.
 
 ## JWT Environment Variables
 

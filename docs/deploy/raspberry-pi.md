@@ -1,14 +1,25 @@
 # Raspberry Pi Deployment
 
+[Back to root README](../../README.md)
+
+
 This page covers Docker-based production deployment on Raspberry Pi.
+
+For a minimal manual run (no bootstrap/scripts/services), use:
+
+- [Pi basic startup (manual)](pi-basic-startup.md)
+
+For fresh machine provisioning and reboot-safe startup, use:
+
+- [Pi one-click bootstrap](pi-one-click-bootstrap.md)
 
 ## Production Compose
 
 Recreate prod services after config changes:
 
 ```bash
-docker compose --profile prod down
-docker compose --profile prod up -d --build api web
+docker compose --env-file .env.docker.web.prod --profile prod down
+docker compose --env-file .env.docker.web.prod --profile prod up -d --build api web
 ```
 
 ## Web Port Mapping

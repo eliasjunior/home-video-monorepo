@@ -1,0 +1,16 @@
+[Unit]
+Description=Home Video Docker Compose Stack
+Requires=docker.service rclone-gdrive.service
+After=network-online.target docker.service rclone-gdrive.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=__PROJECT_DIR__
+ExecStartPre=/usr/bin/mountpoint -q __GDRIVE_MOUNT__
+ExecStart=/usr/bin/docker compose --profile prod up -d --build api web
+ExecStop=/usr/bin/docker compose --profile prod down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
