@@ -1,9 +1,6 @@
 import express from "express";
 import { AUTH_USER, validateCredentials } from "../auth/user";
-import {
-  issueTokens,
-  verifyRefreshToken,
-} from "../auth/tokenService";
+import * as defaultTokenService from "../auth/tokenService";
 import config from "../config";
 import crypto from "crypto";
 import { getCookie } from "../common/Util";
@@ -38,7 +35,10 @@ function ensureCsrf(req, res) {
   return true;
 }
 
-export function createAuthRouter({ refreshTokenStore }) {
+export function createAuthRouter({
+  refreshTokenStore,
+  tokenService = defaultTokenService,
+}) {
   const router = express.Router();
   const cfg = config();
 
@@ -49,10 +49,11 @@ export function createAuthRouter({ refreshTokenStore }) {
       return res.status(401).json({ message: "Invalid credentials" }).end();
     }
 
-    const { accessToken, refreshToken, jti, refreshExpiresAtMs } = issueTokens({
-      userId: AUTH_USER.id,
-      username: AUTH_USER.username,
-    });
+    const { accessToken, refreshToken, jti, refreshExpiresAtMs } =
+      tokenService.issueTokens({
+        userId: AUTH_USER.id,
+        username: AUTH_USER.username,
+      });
 
     refreshTokenStore.save({
       jti,
@@ -93,7 +94,7 @@ export function createAuthRouter({ refreshTokenStore }) {
     }
 
     try {
-      const payload = verifyRefreshToken(refreshToken);
+      const payload = tokenService.verifyRefreshToken(refreshToken);
       if (payload.type !== "refresh") {
         return res.status(401).json({ message: "Invalid refresh token" }).end();
       }
@@ -109,7 +110,7 @@ export function createAuthRouter({ refreshTokenStore }) {
 
       refreshTokenStore.delete(payload.jti);
       const { accessToken, refreshToken: newRefreshToken, jti, refreshExpiresAtMs } =
-        issueTokens({
+        tokenService.issueTokens({
           userId: payload.sub,
           username: AUTH_USER.username,
         });
@@ -155,7 +156,7 @@ export function createAuthRouter({ refreshTokenStore }) {
     }
 
     try {
-      const payload = verifyRefreshToken(refreshToken);
+      const payload = tokenService.verifyRefreshToken(refreshToken);
       refreshTokenStore.delete(payload.jti);
     } catch {
       // swallow invalid token on logout

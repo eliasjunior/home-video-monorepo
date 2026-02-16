@@ -1,10 +1,6 @@
-import jwt from "jsonwebtoken";
 import crypto from "crypto";
-
-const accessSecret = process.env.JWT_ACCESS_SECRET || "access-secret";
-const refreshSecret = process.env.JWT_REFRESH_SECRET || "refresh-secret";
-const accessTtl = process.env.JWT_ACCESS_TTL || "15m";
-const refreshTtl = process.env.JWT_REFRESH_TTL || "180d";
+import jwtTokenProvider from "./providers/jwtTokenProvider";
+import { createTokenConfig } from "./tokenConfig";
 
 export function parseDurationToMs(value) {
   if (typeof value === "number") {
@@ -25,35 +21,47 @@ export function parseDurationToMs(value) {
   return amount * multipliers[unit];
 }
 
-export function issueTokens({ userId, username }) {
-  // Access token: short-lived token used on every request (Authorization: Bearer ...)
-  const accessToken = jwt.sign(
-    { sub: userId, username },
-    accessSecret,
-    { expiresIn: accessTtl }
-  );
+export function createTokenService({
+  tokenProvider = jwtTokenProvider,
+  config = createTokenConfig(),
+  idGenerator = () => crypto.randomUUID(),
+  nowMs = () => Date.now(),
+} = {}) {
+  const { accessSecret, refreshSecret, accessTtl, refreshTtl } = config;
 
-  // "jti" is a unique ID for the refresh token so we can revoke/rotate it.
-  const jti = crypto.randomUUID();
-  // Refresh token: long-lived token used to get a new access token.
-  const refreshToken = jwt.sign(
-    { sub: userId, jti, type: "refresh" },
-    refreshSecret,
-    { expiresIn: refreshTtl }
-  );
+  function issueTokens({ userId, username }) {
+    const accessToken = tokenProvider.sign(
+      { sub: userId, username },
+      { secret: accessSecret, expiresIn: accessTtl }
+    );
 
-  // Store refresh token expiry timestamp so the store can enforce max age.
-  const refreshExpiresAtMs = Date.now() + parseDurationToMs(refreshTtl);
+    const jti = idGenerator();
+    const refreshToken = tokenProvider.sign(
+      { sub: userId, jti, type: "refresh" },
+      { secret: refreshSecret, expiresIn: refreshTtl }
+    );
 
-  return { accessToken, refreshToken, jti, refreshExpiresAtMs };
+    const refreshExpiresAtMs = nowMs() + parseDurationToMs(refreshTtl);
+
+    return { accessToken, refreshToken, jti, refreshExpiresAtMs };
+  }
+
+  function verifyAccessToken(token) {
+    return tokenProvider.verify(token, { secret: accessSecret });
+  }
+
+  function verifyRefreshToken(token) {
+    return tokenProvider.verify(token, { secret: refreshSecret });
+  }
+
+  return {
+    issueTokens,
+    verifyAccessToken,
+    verifyRefreshToken,
+  };
 }
 
-export function verifyAccessToken(token) {
-  // Verifies signature and expiration for access token.
-  return jwt.verify(token, accessSecret);
-}
+const tokenService = createTokenService();
 
-export function verifyRefreshToken(token) {
-  // Verifies signature and expiration for refresh token.
-  return jwt.verify(token, refreshSecret);
-}
+export const { issueTokens, verifyAccessToken, verifyRefreshToken } =
+  tokenService;

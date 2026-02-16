@@ -5,6 +5,7 @@ describe("tokenService", () => {
   let verifyAccessToken;
   let verifyRefreshToken;
   let parseDurationToMs;
+  let createTokenService;
 
   beforeEach(async () => {
     process.env.JWT_ACCESS_SECRET = "access-secret";
@@ -12,8 +13,13 @@ describe("tokenService", () => {
     process.env.JWT_ACCESS_TTL = "15m";
     process.env.JWT_REFRESH_TTL = "180d";
     jest.resetModules();
-    ({ issueTokens, verifyAccessToken, verifyRefreshToken, parseDurationToMs } =
-      await import("./tokenService.js"));
+    ({
+      issueTokens,
+      verifyAccessToken,
+      verifyRefreshToken,
+      parseDurationToMs,
+      createTokenService,
+    } = await import("./tokenService.js"));
   });
 
   it("issues access and refresh tokens", () => {
@@ -86,5 +92,65 @@ describe("tokenService", () => {
     process.env.JWT_REFRESH_SECRET = prevRefresh;
     process.env.JWT_ACCESS_TTL = prevAccessTtl;
     process.env.JWT_REFRESH_TTL = prevRefreshTtl;
+  });
+
+  it("supports injecting a token provider", () => {
+    const sign = jest
+      .fn()
+      .mockReturnValueOnce("access-token")
+      .mockReturnValueOnce("refresh-token");
+    const verify = jest
+      .fn()
+      .mockReturnValueOnce({ sub: "user-1" })
+      .mockReturnValueOnce({ sub: "user-1", jti: "jti-1", type: "refresh" });
+    const tokenProvider = { sign, verify };
+    const nowMs = jest.fn(() => 1000);
+    const idGenerator = jest.fn(() => "jti-1");
+
+    const tokenService = createTokenService({
+      tokenProvider,
+      config: {
+        accessSecret: "a",
+        refreshSecret: "r",
+        accessTtl: "1m",
+        refreshTtl: "2h",
+      },
+      idGenerator,
+      nowMs,
+    });
+
+    const issued = tokenService.issueTokens({
+      userId: "user-1",
+      username: "admin",
+    });
+    const accessPayload = tokenService.verifyAccessToken("access-token");
+    const refreshPayload = tokenService.verifyRefreshToken("refresh-token");
+
+    expect(sign).toHaveBeenNthCalledWith(
+      1,
+      { sub: "user-1", username: "admin" },
+      { secret: "a", expiresIn: "1m" }
+    );
+    expect(sign).toHaveBeenNthCalledWith(
+      2,
+      { sub: "user-1", jti: "jti-1", type: "refresh" },
+      { secret: "r", expiresIn: "2h" }
+    );
+    expect(verify).toHaveBeenNthCalledWith(1, "access-token", { secret: "a" });
+    expect(verify).toHaveBeenNthCalledWith(2, "refresh-token", {
+      secret: "r",
+    });
+    expect(issued).toEqual({
+      accessToken: "access-token",
+      refreshToken: "refresh-token",
+      jti: "jti-1",
+      refreshExpiresAtMs: 2 * 60 * 60 * 1000 + 1000,
+    });
+    expect(accessPayload).toEqual({ sub: "user-1" });
+    expect(refreshPayload).toEqual({
+      sub: "user-1",
+      jti: "jti-1",
+      type: "refresh",
+    });
   });
 });
