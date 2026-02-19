@@ -8,7 +8,7 @@ import Login from "components/auth/Login";
 
 export default function Routers({ dispatch }) {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={process.env.PUBLIC_URL || '/home-video'}>
       <Switch>
         <Route
           exact

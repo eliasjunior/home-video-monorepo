@@ -8,6 +8,8 @@ import { createAuthSessionService } from "../auth/authSessionService";
 import config from "../config";
 import { getCookie } from "../common/Util";
 import { ensureCsrf } from "../middleware/csrf";
+import { upsertUser } from "../user/userStore.js";
+import { ensureUserDirectory } from "../user/userDirectory.js";
 
 const COOKIE_ACCESS = "access_token";
 const COOKIE_REFRESH = "refresh_token";
@@ -53,9 +55,90 @@ export function createAuthRouter({
   async function login(req, res) {
     const { username, password } = req.body || {};
     const isValid = await validateCredentials({ username, password });
+
+    // If local validation fails, try second retry if enabled
     if (!isValid) {
+      const secondRetryEnabled = process.env.LOGIN_SECOND_RETRY === "true";
+      const secondRetryUrl = process.env.LOGIN_SECOND_RETRY_URL;
+
+      if (secondRetryEnabled && secondRetryUrl) {
+        console.log(`[LOGIN] Local validation failed, attempting second retry at: ${secondRetryUrl}`);
+
+        try {
+          // Get CSRF URL from config or construct from base URL
+          const csrfUrl = process.env.LOGIN_SECOND_RETRY_CSRF_URL ||
+            (() => {
+              const baseUrl = secondRetryUrl.substring(0, secondRetryUrl.lastIndexOf('/api/'));
+              return `${baseUrl}/api/csrf`;
+            })();
+
+          console.log(`[LOGIN] Fetching CSRF token from: ${csrfUrl}`);
+
+          // Step 1: Get CSRF token
+          const csrfResponse = await fetch(csrfUrl, {
+            method: "GET",
+            credentials: "include",
+          });
+
+          if (csrfResponse.ok) {
+            const csrfData = await csrfResponse.json();
+            const csrfToken = csrfData.token;
+
+            if (csrfToken) {
+              console.log(`[LOGIN] CSRF token obtained, authenticating...`);
+
+              // Step 2: Call external authentication service with CSRF token
+              const response = await fetch(secondRetryUrl, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-CSRF-TOKEN": csrfToken,
+                },
+                credentials: "include",
+                body: JSON.stringify({ username, password }),
+              });
+
+              if (response.ok) {
+                // Register user in application store and create directories
+                const appUser = upsertUser(username);
+                ensureUserDirectory(username);
+
+                // Create login session for external user
+                const loginSession = authLoginService.createLoginSession({
+                  userId: appUser.id,
+                  username: username,
+                });
+
+                cookies.setAuthCookies({ res, session: loginSession });
+
+                // Store authentication context in session if exists
+                if (req.session) {
+                  req.session.authenticated = true;
+                  req.session.user = {
+                    id: appUser.id,
+                    username: username,
+                    email: username,
+                    authorities: ["ROLE_USER"],
+                    videoPath: appUser.videoPath,
+                  };
+                }
+
+                console.log(`[LOGIN] Second retry successful for user: ${username}`);
+                return res.status(200).json({ accessToken: loginSession.accessToken }).end();
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`[LOGIN] Second retry error:`, error.message);
+        }
+      }
+
       return res.status(401).json({ message: "Invalid credentials" }).end();
     }
+
+    // Register admin user in application store and create directories
+    const appUser = upsertUser(AUTH_USER.username);
+    ensureUserDirectory(AUTH_USER.username);
 
     const loginSession = authLoginService.createLoginSession({
       userId: AUTH_USER.id,
@@ -63,6 +146,18 @@ export function createAuthRouter({
     });
 
     cookies.setAuthCookies({ res, session: loginSession });
+
+    // Store authentication context in session if exists
+    if (req.session) {
+      req.session.authenticated = true;
+      req.session.user = {
+        id: AUTH_USER.id,
+        username: AUTH_USER.username,
+        email: AUTH_USER.username,
+        authorities: ["ROLE_ADMIN"],
+        videoPath: appUser.videoPath,
+      };
+    }
 
     return res.status(200).json({ accessToken: loginSession.accessToken }).end();
   }

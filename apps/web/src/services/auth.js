@@ -57,3 +57,12 @@ export async function logout() {
   });
   return { status: res.status };
 }
+
+export async function checkAuthentication() {
+  const res = await fetch(`${SERVER_URL}/auth/check`, {
+    method: "GET",
+    credentials: "include",
+  });
+  const body = await parseJsonSafe(res);
+  return { status: res.status, ...body };
+}

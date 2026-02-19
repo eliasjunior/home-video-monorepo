@@ -14,7 +14,9 @@
     "hash:password": "node scripts/hash-password.js",
     "docker:build": "docker build -t home-video-api:dev .",
     "docker:run": "docker run --rm -p 8080:8080 home-video-api:dev",
-    "docker:start": "babel-node init.js"
+    "docker:start": "babel-node init.js",
+    "build:web": "cd ../web && npm run build",
+    "build:all": "npm run build:web"
   },
   "repository": {
     "type": "git",
@@ -33,11 +35,15 @@
     "@babel/preset-env": "^7.29.0",
     "axios": "^1.13.4",
     "bcrypt": "^5.1.1",
+    "connect-redis": "^7.1.1",
     "cors": "^2.8.6",
     "dotenv": "^17.2.4",
     "express": "^5.2.1",
+    "express-session": "^1.18.1",
     "jsonwebtoken": "^9.0.2",
+    "jwks-rsa": "^3.2.1",
     "nodemon": "^3.1.11",
+    "redis": "^4.7.0",
     "subsrt": "^1.1.1"
   },
   "devDependencies": {

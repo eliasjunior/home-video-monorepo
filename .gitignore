@@ -13,3 +13,4 @@ apps/api/report.json
 .codex/environments/environment.toml
 apps/api/.codex/environments/environment.toml
 apps/web/.codex/environments/environment.toml
+.idea/

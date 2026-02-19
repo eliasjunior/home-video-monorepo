@@ -34,8 +34,10 @@ async function requestWithAuth(path, options = {}) {
   }
 
   if (response.status === 401) {
-    if (window.location.pathname !== "/login") {
-      window.location.assign("/login");
+    const publicUrl = process.env.PUBLIC_URL || '/home-video';
+    const loginPath = `${publicUrl}/login`;
+    if (window.location.pathname !== loginPath) {
+      window.location.assign(loginPath);
     }
   }
 
@@ -67,8 +69,10 @@ async function requestBlobWithAuth(path, options = {}) {
   }
 
   if (res.status === 401) {
-    if (window.location.pathname !== "/login") {
-      window.location.assign("/login");
+    const publicUrl = process.env.PUBLIC_URL || '/home-video';
+    const loginPath = `${publicUrl}/login`;
+    if (window.location.pathname !== loginPath) {
+      window.location.assign(loginPath);
     }
   }
 
