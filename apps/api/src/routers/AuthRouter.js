@@ -1,418 +1,127 @@
 import express from "express";
 import { AUTH_USER, validateCredentials } from "../auth/user";
-import {
-  issueTokens,
-  verifyRefreshToken,
-} from "../auth/tokenService";
+import * as defaultTokenService from "../auth/tokenService";
+import { createAuthCookieService } from "../auth/authCookieService";
+import { generateCsrfToken } from "../auth/csrfToken";
+import { createAuthLoginService } from "../auth/authLoginService";
+import { createAuthSessionService } from "../auth/authSessionService";
 import config from "../config";
-import crypto from "crypto";
 import { getCookie } from "../common/Util";
-import { ssoRedisEnabled, sessionCookieName } from "../auth/redisSessionStore";
-import { upsertUser } from "../user/userStore.js";
-import { ensureUserDirectory } from "../user/userDirectory.js";
+import { ensureCsrf } from "../middleware/csrf";
 
 const COOKIE_ACCESS = "access_token";
 const COOKIE_REFRESH = "refresh_token";
 const COOKIE_CSRF = "csrf_token";
 
-function buildCookieOptions({ isHttpOnly, maxAgeMs, path = "/", cfg }) {
-  const options = {
-    httpOnly: Boolean(isHttpOnly),
-    secure: Boolean(cfg.cookieSecure),
-    sameSite: cfg.cookieSameSite,
-    path,
-  };
-  if (cfg.cookieDomain) {
-    options.domain = cfg.cookieDomain;
-  }
-  if (Number.isFinite(maxAgeMs)) {
-    options.maxAge = maxAgeMs;
-  }
-  return options;
-}
-
-function ensureCsrf(req, res) {
-  const csrfHeader = req.headers["x-csrf-token"];
-  const csrfCookie = getCookie(req, COOKIE_CSRF);
-  if (!csrfHeader || !csrfCookie || csrfHeader !== csrfCookie) {
-    res.status(403).json({ message: "Invalid CSRF token" }).end();
-    return false;
-  }
-  return true;
-}
-
-export function createAuthRouter({ refreshTokenStore }) {
+export function createAuthRouter({
+  refreshTokenStore,
+  services = {},
+}) {
   const router = express.Router();
   const cfg = config();
+  const tokenService = services.tokenService || defaultTokenService;
+  const csrfTokenGenerator =
+    services.csrfTokenGenerator || generateCsrfToken;
+  const authLoginService =
+    services.authLoginService ||
+    createAuthLoginService({
+      tokenService,
+      refreshTokenStore,
+      csrfTokenGenerator,
+    });
+  const authSessionService =
+    services.authSessionService ||
+    createAuthSessionService({
+      tokenService,
+      refreshTokenStore,
+    });
+  const cookies =
+    services.authCookieService ||
+    createAuthCookieService({
+      cfg,
+      cookieNames: {
+        access: COOKIE_ACCESS,
+        refresh: COOKIE_REFRESH,
+        csrf: COOKIE_CSRF,
+      },
+    });
 
-  // Check if user is authenticated (for redirecting from login page)
-  router.get("/check", (req, res) => {
-    console.log(`[AUTH_CHECK] Cookies:`, req.headers.cookie);
-    console.log(`[AUTH_CHECK] SessionID: ${req.sessionID}`);
-    console.log(`[AUTH_CHECK] Session exists: ${!!req.session}`);
-    console.log(`[AUTH_CHECK] Session data:`, JSON.stringify(req.session, null, 2));
-    console.log(`[AUTH_CHECK] Session authenticated: ${req.session?.authenticated}`);
-    console.log(`[AUTH_CHECK] Session user: ${req.session?.user?.username}`);
+  router.post("/login", login);
+  router.post("/refresh", refresh);
+  router.post("/logout", logout);
 
-    if (req.session && req.session.authenticated && req.session.user) {
-      return res.status(200).json({
-        authenticated: true,
-        user: {
-          id: req.session.user.id,
-          username: req.session.user.username,
-          email: req.session.user.email,
-        },
-      }).end();
-    }
-    return res.status(200).json({ authenticated: false }).end();
-  });
-
-  router.post("/login", async (req, res) => {
+  async function login(req, res) {
     const { username, password } = req.body || {};
     const isValid = await validateCredentials({ username, password });
-
-    // If local validation fails, try second retry if enabled
     if (!isValid) {
-      const secondRetryEnabled = process.env.LOGIN_SECOND_RETRY === "true";
-      const secondRetryUrl = process.env.LOGIN_SECOND_RETRY_URL;
-
-      if (secondRetryEnabled && secondRetryUrl) {
-        console.log(`[LOGIN] Local validation failed, attempting second retry at: ${secondRetryUrl}`);
-
-        try {
-          // Get CSRF URL from config or construct from base URL
-          const csrfUrl = process.env.LOGIN_SECOND_RETRY_CSRF_URL ||
-            (() => {
-              const baseUrl = secondRetryUrl.substring(0, secondRetryUrl.lastIndexOf('/api/'));
-              return `${baseUrl}/api/csrf`;
-            })();
-
-          console.log(`[LOGIN] Fetching CSRF token from: ${csrfUrl}`);
-
-          // Step 1: Get CSRF token
-          const csrfResponse = await fetch(csrfUrl, {
-            method: "GET",
-            credentials: "include",
-          });
-
-          if (!csrfResponse.ok) {
-            console.error(`[LOGIN] Failed to fetch CSRF token: ${csrfResponse.status}`);
-            throw new Error(`CSRF fetch failed with status ${csrfResponse.status}`);
-          }
-
-          const csrfData = await csrfResponse.json();
-          const csrfToken = csrfData.token;
-
-          if (!csrfToken) {
-            console.error(`[LOGIN] No CSRF token in response`);
-            throw new Error("No CSRF token received");
-          }
-
-          console.log(`[LOGIN] CSRF token obtained, authenticating...`);
-
-          // Step 2: Call external authentication service with CSRF token
-          const response = await fetch(secondRetryUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-CSRF-TOKEN": csrfToken,
-            },
-            credentials: "include",
-            body: JSON.stringify({ username, password }),
-          });
-
-          if (response.ok) {
-            // Get token from response header (Authorization or custom header)
-            const authHeader = response.headers.get("Authorization");
-            let externalToken = null;
-
-            if (authHeader) {
-              // Extract token from "Bearer <token>" format
-              const [type, token] = authHeader.split(" ");
-              if (type === "Bearer" && token) {
-                externalToken = token;
-              }
-            }
-
-            // Also check custom header in case token is there
-            if (!externalToken) {
-              externalToken = response.headers.get("X-Auth-Token");
-            }
-
-            if (externalToken) {
-              console.log(`[LOGIN] Second retry successful, received external token`);
-
-              // Register user in application store and create directories
-              const appUser = upsertUser(username);
-              ensureUserDirectory(username);
-
-              // Issue our own tokens for session consistency
-              const { accessToken, refreshToken, jti, refreshExpiresAtMs } = issueTokens({
-                userId: appUser.id,
-                username: username,
-              });
-
-              refreshTokenStore.save({
-                jti,
-                userId: appUser.id,
-                expiresAtMs: refreshExpiresAtMs,
-              });
-
-              // Store authentication context in session
-              req.session.authenticated = true;
-              req.session.user = {
-                id: appUser.id,
-                username: username,
-                email: username,
-                authorities: ["ROLE_USER"],
-                accountNonLocked: true,
-                accountNonExpired: true,
-                credentialsNonExpired: true,
-                enabled: true,
-                videoPath: appUser.videoPath,
-              };
-              req.session.token = {
-                tokenType: "Bearer",
-                tokenValue: accessToken,
-                issuedAt: new Date().toISOString(),
-                expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-                scopes: ["ROLE_USER"],
-              };
-              req.session.externalToken = externalToken; // Store external token if needed
-              req.session.lastAccessedTime = Date.now();
-
-              console.log(`[LOGIN] Session saved for external user: ${username}, sessionID: ${req.sessionID}`);
-
-              const csrfToken = crypto.randomBytes(32).toString("hex");
-              res.cookie(
-                COOKIE_ACCESS,
-                accessToken,
-                buildCookieOptions({ isHttpOnly: true, cfg })
-              );
-              res.cookie(
-                COOKIE_REFRESH,
-                refreshToken,
-                buildCookieOptions({ isHttpOnly: true, path: "/auth", cfg })
-              );
-              res.cookie(
-                COOKIE_CSRF,
-                csrfToken,
-                buildCookieOptions({ isHttpOnly: false, cfg })
-              );
-
-              return res.status(200).json({ accessToken }).end();
-            } else {
-              console.log(`[LOGIN] Second retry response missing token in headers`);
-            }
-          } else {
-            console.log(`[LOGIN] Second retry failed with status: ${response.status}`);
-          }
-        } catch (error) {
-          console.error(`[LOGIN] Second retry error:`, error.message);
-        }
-      }
-
-      // If we reach here, both validations failed
       return res.status(401).json({ message: "Invalid credentials" }).end();
     }
 
-    // Register admin user in application store and create directories
-    const appUser = upsertUser(AUTH_USER.username);
-    ensureUserDirectory(AUTH_USER.username);
-
-    const { accessToken, refreshToken, jti, refreshExpiresAtMs } = issueTokens({
+    const loginSession = authLoginService.createLoginSession({
       userId: AUTH_USER.id,
       username: AUTH_USER.username,
     });
 
-    refreshTokenStore.save({
-      jti,
-      userId: AUTH_USER.id,
-      expiresAtMs: refreshExpiresAtMs,
-    });
+    cookies.setAuthCookies({ res, session: loginSession });
 
-    // Store authentication context in session (similar to Spring Security)
-    req.session.authenticated = true;
-    req.session.user = {
-      id: AUTH_USER.id,
-      username: AUTH_USER.username,
-      email: AUTH_USER.username,
-      authorities: ["ROLE_ADMIN"],
-      accountNonLocked: true,
-      accountNonExpired: true,
-      credentialsNonExpired: true,
-      enabled: true,
-      videoPath: appUser.videoPath,
-    };
-    req.session.token = {
-      tokenType: "Bearer",
-      tokenValue: accessToken,
-      issuedAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 min
-      scopes: ["ROLE_ADMIN"],
-    };
-    req.session.lastAccessedTime = Date.now();
+    return res.status(200).json({ accessToken: loginSession.accessToken }).end();
+  }
 
-    console.log(`[LOGIN] Session saved for user: ${AUTH_USER.username}, sessionID: ${req.sessionID}`);
-
-    const csrfToken = crypto.randomBytes(32).toString("hex");
-    res.cookie(
-      COOKIE_ACCESS,
-      accessToken,
-      buildCookieOptions({ isHttpOnly: true, cfg })
-    );
-    res.cookie(
-      COOKIE_REFRESH,
-      refreshToken,
-      buildCookieOptions({ isHttpOnly: true, path: "/auth", cfg })
-    );
-    res.cookie(
-      COOKIE_CSRF,
-      csrfToken,
-      buildCookieOptions({ isHttpOnly: false, cfg })
-    );
-
-    return res.status(200).json({ accessToken }).end();
-  });
-
-  router.post("/refresh", (req, res) => {
+  function refresh(req, res) {
     const { refreshToken: refreshTokenBody } = req.body || {};
-    const refreshToken =
-      refreshTokenBody || getCookie(req, COOKIE_REFRESH);
+    const refreshToken = refreshTokenBody || getCookie(req, COOKIE_REFRESH);
     if (!refreshToken) {
       return res.status(400).json({ message: "Missing refresh token" }).end();
     }
 
-    if (!refreshTokenBody && !ensureCsrf(req, res)) {
+    if (
+      !refreshTokenBody &&
+      !ensureCsrf({ req, res, cookieName: COOKIE_CSRF })
+    ) {
       return;
     }
 
-    try {
-      const payload = verifyRefreshToken(refreshToken);
-      if (payload.type !== "refresh") {
-        return res.status(401).json({ message: "Invalid refresh token" }).end();
-      }
-
-      const record = refreshTokenStore.get(payload.jti);
-      if (!record || record.userId !== payload.sub) {
-        return res.status(401).json({ message: "Refresh token revoked" }).end();
-      }
-      if (record.expiresAtMs < Date.now()) {
-        refreshTokenStore.delete(payload.jti);
-        return res.status(401).json({ message: "Refresh token expired" }).end();
-      }
-
-      refreshTokenStore.delete(payload.jti);
-      const { accessToken, refreshToken: newRefreshToken, jti, refreshExpiresAtMs } =
-        issueTokens({
-          userId: payload.sub,
-          username: AUTH_USER.username,
-        });
-      refreshTokenStore.save({
-        jti,
-        userId: payload.sub,
-        expiresAtMs: refreshExpiresAtMs,
-      });
-
-      const csrfToken = crypto.randomBytes(32).toString("hex");
-      res.cookie(
-        COOKIE_ACCESS,
-        accessToken,
-        buildCookieOptions({ isHttpOnly: true, cfg })
-      );
-      res.cookie(
-        COOKIE_REFRESH,
-        newRefreshToken,
-        buildCookieOptions({ isHttpOnly: true, path: "/auth", cfg })
-      );
-      res.cookie(
-        COOKIE_CSRF,
-        csrfToken,
-        buildCookieOptions({ isHttpOnly: false, cfg })
-      );
-
-      return res.status(200).json({ accessToken }).end();
-    } catch {
-      return res.status(401).json({ message: "Invalid refresh token" }).end();
+    const refreshResult = authSessionService.rotateRefreshSession({
+      refreshToken,
+      username: AUTH_USER.username,
+    });
+    if (!refreshResult.ok) {
+      return res
+        .status(refreshResult.status)
+        .json({ message: refreshResult.message })
+        .end();
     }
-  });
 
-  router.post("/logout", (req, res) => {
-    console.log("[LOGOUT] Processing logout request");
-    console.log("[LOGOUT] Cookies:", req.headers.cookie);
-    console.log("[LOGOUT] SessionID:", req.sessionID);
+    const session = {
+      accessToken: refreshResult.accessToken,
+      refreshToken: refreshResult.refreshToken,
+      csrfToken: csrfTokenGenerator(),
+    };
+    cookies.setAuthCookies({ res, session });
 
+    return res
+      .status(200)
+      .json({ accessToken: refreshResult.accessToken })
+      .end();
+  }
+
+  function logout(req, res) {
     const { refreshToken: refreshTokenBody } = req.body || {};
-    const refreshToken =
-      refreshTokenBody || getCookie(req, COOKIE_REFRESH);
-
-    // Don't require refresh token for Spring Session logout
-    if (!refreshToken && !req.session?.authenticated) {
-      console.log("[LOGOUT] No refresh token and no active session");
-      return res.status(400).json({ message: "Not logged in" }).end();
+    const refreshToken = refreshTokenBody || getCookie(req, COOKIE_REFRESH);
+    if (!refreshToken) {
+      return res.status(400).json({ message: "Missing refresh token" }).end();
     }
-
-    if (refreshToken && !refreshTokenBody && !ensureCsrf(req, res)) {
+    if (
+      !refreshTokenBody &&
+      !ensureCsrf({ req, res, cookieName: COOKIE_CSRF })
+    ) {
       return;
     }
+    authSessionService.revokeRefreshSession({ refreshToken });
 
-    // Delete refresh token if present
-    if (refreshToken) {
-      try {
-        const payload = verifyRefreshToken(refreshToken);
-        refreshTokenStore.delete(payload.jti);
-        console.log("[LOGOUT] Deleted refresh token");
-      } catch {
-        // swallow invalid token on logout
-      }
-    }
-
-    // Destroy session in Redis if it exists
-    if (req.session && req.sessionID) {
-      console.log("[LOGOUT] Destroying session:", req.sessionID);
-      req.session.destroy((err) => {
-        if (err) {
-          console.error("[LOGOUT] Session destroy error:", err);
-        } else {
-          console.log("[LOGOUT] Session destroyed successfully");
-        }
-      });
-    }
-
-    // Clear all authentication cookies
-    res.clearCookie(COOKIE_ACCESS, buildCookieOptions({ isHttpOnly: true, cfg }));
-    res.clearCookie(
-      COOKIE_REFRESH,
-      buildCookieOptions({ isHttpOnly: true, path: "/auth", cfg })
-    );
-    res.clearCookie(COOKIE_CSRF, buildCookieOptions({ isHttpOnly: false, cfg }));
-
-    // Clear session cookies (both SESSIONID and SESSION)
-    if (ssoRedisEnabled) {
-      // Clear SESSIONID (Spring Session default)
-      res.clearCookie("SESSIONID", {
-        path: "/",
-        httpOnly: true,
-        secure: cfg.cookieSecure,
-        sameSite: cfg.cookieSameSite,
-      });
-      console.log("[LOGOUT] Cleared SESSIONID cookie");
-
-      // Clear SESSION if it's different
-      if (sessionCookieName !== "SESSIONID") {
-        res.clearCookie(sessionCookieName, {
-          path: "/",
-          httpOnly: true,
-          secure: cfg.cookieSecure,
-          sameSite: cfg.cookieSameSite,
-        });
-        console.log(`[LOGOUT] Cleared ${sessionCookieName} cookie`);
-      }
-    }
-
-    console.log("[LOGOUT] Logout completed successfully");
+    cookies.clearAuthCookies(res);
     return res.status(200).json({ message: "Logged out" }).end();
-  });
+  }
 
   return router;
 }

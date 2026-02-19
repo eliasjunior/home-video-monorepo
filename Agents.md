@@ -24,6 +24,7 @@ assume capabilities beyond what is explicitly stated.
 - Agents:
   - ❌ cannot change Node versions
   - ❌ cannot elevate permissions
+  - ❌ cannot change anything before asking permission.
 - Human (me):
   - ✅ can run shell commands
   - ✅ can upgrade Node manually

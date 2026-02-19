@@ -49,4 +49,33 @@ describe("requireAuth middleware", () => {
 
     expect(response.status).toBe(200);
   });
+
+  it("supports injected tokenService", async () => {
+    const { createRequireAuth } = await import("./auth.js");
+    const verifyAccessToken = jest.fn(() => ({
+      sub: "injected-user",
+      username: "injected-name",
+    }));
+    const requireAuth = createRequireAuth({
+      tokenService: { verifyAccessToken },
+    });
+    const req = {
+      headers: { authorization: "Bearer injected-token", cookie: "" },
+    };
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn().mockReturnThis(),
+      end: jest.fn(),
+    };
+    const next = jest.fn();
+
+    requireAuth(req, res, next);
+
+    expect(verifyAccessToken).toHaveBeenCalledWith("injected-token");
+    expect(req.user).toEqual({
+      id: "injected-user",
+      username: "injected-name",
+    });
+    expect(next).toHaveBeenCalled();
+  });
 });

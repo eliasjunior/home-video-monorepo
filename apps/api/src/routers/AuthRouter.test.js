@@ -171,4 +171,51 @@ describe("AuthRouter", () => {
 
     expect(logout.status).toBe(403);
   });
+
+  it("uses injected tokenService for refresh flow", async () => {
+    const injectedStore = createInMemoryRefreshTokenStore();
+    injectedStore.save({
+      jti: "old-jti",
+      userId: "user-1",
+      expiresAtMs: Date.now() + 60_000,
+    });
+
+    const injectedTokenService = {
+      issueTokens: jest.fn(() => ({
+        accessToken: "new-access-token",
+        refreshToken: "new-refresh-token",
+        jti: "new-jti",
+        refreshExpiresAtMs: Date.now() + 3600_000,
+      })),
+      verifyRefreshToken: jest.fn(() => ({
+        sub: "user-1",
+        jti: "old-jti",
+        type: "refresh",
+      })),
+    };
+
+    const injectedApp = express();
+    injectedApp.use(express.json());
+    injectedApp.use(
+      "/auth",
+      createAuthRouter({
+        refreshTokenStore: injectedStore,
+        services: { tokenService: injectedTokenService },
+      })
+    );
+
+    const response = await request(injectedApp)
+      .post("/auth/refresh")
+      .send({ refreshToken: "provided-token" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ accessToken: "new-access-token" });
+    expect(injectedTokenService.verifyRefreshToken).toHaveBeenCalledWith(
+      "provided-token"
+    );
+    expect(injectedTokenService.issueTokens).toHaveBeenCalledWith({
+      userId: "user-1",
+      username: expect.any(String),
+    });
+  });
 });
