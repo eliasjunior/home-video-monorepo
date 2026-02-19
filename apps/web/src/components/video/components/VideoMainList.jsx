@@ -8,6 +8,8 @@ import Header from "components/header/Header";
 import PosterList from "./PosterList";
 import { MOVIE_CATEG, SERIES_CATEG } from "common/constants";
 import { HAS_ERROR } from "main/Reducer";
+import { useWebSocket } from "../../../hooks/useWebSocket";
+import { getCurrentUser } from "../../../services/Api";
 
 function VideoMainList({ history, dispatch }) {
   const [movieMap, setMovieMap] = useState({});
@@ -16,6 +18,22 @@ function VideoMainList({ history, dispatch }) {
   const [seriesMap, setSeriesMap] = useState({});
   const [searchValue, setSearchValue] = useState("");
   const [query, setQuery] = useState(MOVIE_CATEG);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Fetch current user on mount
+  useEffect(() => {
+    async function fetchCurrentUser() {
+      try {
+        const user = await getCurrentUser();
+        setCurrentUser(user);
+        console.log('[VideoMainList] Current user:', user.username);
+      } catch (err) {
+        console.error('[VideoMainList] Error fetching current user:', err);
+      }
+    }
+    fetchCurrentUser();
+  }, []);
 
   useEffect(() => {
     if (query === MOVIE_CATEG) {
@@ -25,7 +43,38 @@ function VideoMainList({ history, dispatch }) {
     }
   }, [query]);
 
+  // WebSocket connection for real-time updates
+  useWebSocket({
+    onMessage: (data) => {
+      if (data.type === 'file-change') {
+        console.log('[VideoMainList] File change detected:', data.data);
+
+        // Filter by username in multi-user mode
+        if (currentUser && data.data.username && data.data.username !== currentUser.username) {
+          console.log(`[VideoMainList] Ignoring event for different user: ${data.data.username}`);
+          return;
+        }
+
+        // Refresh the appropriate list based on the category
+        if (data.data.category === 'movies' && query === MOVIE_CATEG) {
+          console.log('[VideoMainList] Refreshing movies list');
+          fetchMovies();
+        } else if (data.data.category === 'series' && query === SERIES_CATEG) {
+          console.log('[VideoMainList] Refreshing series list');
+          fetchSeries();
+        }
+      }
+    },
+    onConnect: () => {
+      console.log('[VideoMainList] WebSocket connected');
+    },
+    onDisconnect: () => {
+      console.log('[VideoMainList] WebSocket disconnected');
+    }
+  });
+
   async function fetchMovies() {
+    setIsLoading(true);
     try {
       const { allIds, byId, error } = await getPosters();
       if (!error) {
@@ -37,10 +86,13 @@ function VideoMainList({ history, dispatch }) {
       }
     } catch (err) {
       dispatch({ type: HAS_ERROR, payload: "Error fetching the data" });
+    } finally {
+      setIsLoading(false);
     }
   }
 
   async function fetchSeries() {
+    setIsLoading(true);
     try {
       const { allIds, byId, error } = await getPosters(true);
       if (!error) {
@@ -52,6 +104,8 @@ function VideoMainList({ history, dispatch }) {
       }
     } catch (err) {
       dispatch({ type: HAS_ERROR, payload: "Error fetching the data" });
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -61,9 +115,11 @@ function VideoMainList({ history, dispatch }) {
     );
   };
 
-  return allMovieIds.length === 0 ? (
-    <Loading></Loading>
-  ) : (
+  if (isLoading) {
+    return <Loading></Loading>;
+  }
+
+  return (
     <div style={{ minHeight: "inherit" }}>
       <Header
         onChangeSearch={(ev) => {
@@ -74,20 +130,32 @@ function VideoMainList({ history, dispatch }) {
       ></Header>
       <div className="player-list">
         {query === MOVIE_CATEG ? (
-          <PosterList
-            ids={allMovieIds}
-            videoMap={movieMap}
-            searchValue={searchValue}
-            onSetVideo={setUpMovie}
-          ></PosterList>
+          allMovieIds.length === 0 ? (
+            <div style={{ color: "white", padding: "20px", textAlign: "center" }}>
+              No videos found
+            </div>
+          ) : (
+            <PosterList
+              ids={allMovieIds}
+              videoMap={movieMap}
+              searchValue={searchValue}
+              onSetVideo={setUpMovie}
+            ></PosterList>
+          )
         ) : (
-          <PosterList
-            ids={allSeriesIds}
-            videoMap={seriesMap}
-            searchValue={searchValue}
-            isSeries={true}
-            onSetVideo={setUpMovie}
-          ></PosterList>
+          allSeriesIds.length === 0 ? (
+            <div style={{ color: "white", padding: "20px", textAlign: "center" }}>
+              No series found
+            </div>
+          ) : (
+            <PosterList
+              ids={allSeriesIds}
+              videoMap={seriesMap}
+              searchValue={searchValue}
+              isSeries={true}
+              onSetVideo={setUpMovie}
+            ></PosterList>
+          )
         )}
         <Footer></Footer>
       </div>

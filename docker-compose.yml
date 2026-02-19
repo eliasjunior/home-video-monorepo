@@ -29,16 +29,17 @@ services:
       - SSO_REDIS_ENABLED=true
       - USE_SPRING_SESSION=true
       - REDIS_HOST=host.docker.internal
-      - JWKS_VALIDATION=true
+      - JWKS_VALIDATION=false
       - SESSION_COOKIE_NAME=SESSIONID
       - LOGIN_SECOND_RETRY=true
       - LOGIN_SECOND_RETRY_URL=http://host.docker.internal:8080/api/authenticate
       - LOGIN_SECOND_RETRY_CSRF_URL=http://host.docker.internal:8080/api/csrf
       - MULTI_USER_ENABLED=true
+      - FILE_WATCHER_ENABLED=true
     ports:
       - "8081:8081"
     volumes:
-      - /Users/rodrigo/Downloads/Videos:/mnt-host:ro
+      - /Users/rodrigo/Downloads/Videos:/mnt-host
     secrets:
       - admin_password_hash
     profiles:

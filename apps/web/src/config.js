@@ -38,6 +38,7 @@ export default function config() {
       result.PORT = currentPort;
       result.host = windowRef.location.hostname;
       result.SERVER_URL = `${result.PROTOCOL}://${result.host}:${result.PORT}${publicUrl}`;
+      console.log(`[CONFIG] Production mode - Using window.location: ${result.SERVER_URL}`);
     } else {
       // Fallback for SSR or non-browser environments
       const defaultProtocol = REACT_APP_SERVER_PROTOCOL || "https";
@@ -45,12 +46,15 @@ export default function config() {
       result.PORT = process.env.PORT || 8080;
       result.host = host;
       result.SERVER_URL = `${result.PROTOCOL}://${result.host}:${result.PORT}${publicUrl}`;
+      console.log(`[CONFIG] Production mode - Fallback (no window): ${result.SERVER_URL}`);
     }
   } else {
     result.PROTOCOL = "http";
     result.PORT = 8080;
     result.host = host; // testing purposes, pointing to prod
     result.SERVER_URL = `${result.PROTOCOL}://${result.host}:${result.PORT}${publicUrl}`;
+    console.log(`[CONFIG] Development mode: ${result.SERVER_URL}`);
   }
+  console.log(`[CONFIG] Final SERVER_URL: ${result.SERVER_URL}`);
   return result;
 }

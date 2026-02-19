@@ -18,6 +18,7 @@ const COOKIE_CSRF = "csrf_token";
 export function createAuthRouter({
   refreshTokenStore,
   services = {},
+  requireAuth,
 }) {
   const router = express.Router();
   const cfg = config();
@@ -51,6 +52,7 @@ export function createAuthRouter({
   router.post("/login", login);
   router.post("/refresh", refresh);
   router.post("/logout", logout);
+  router.get("/me", requireAuth || ((req, res, next) => next()), me);
 
   async function login(req, res) {
     const { username, password } = req.body || {};
@@ -214,8 +216,37 @@ export function createAuthRouter({
     }
     authSessionService.revokeRefreshSession({ refreshToken });
 
+    // Destroy session if it exists (deletes from Redis if using Spring Session)
+    if (req.session) {
+      const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'connect.sid';
+      req.session.destroy((err) => {
+        if (err) {
+          console.error('[LOGOUT] Error destroying session:', err);
+        }
+        // Clear the session cookie
+        res.clearCookie(sessionCookieName, {
+          path: '/',
+          httpOnly: true,
+          secure: process.env.COOKIE_SECURE === 'true',
+          sameSite: process.env.COOKIE_SAMESITE || 'lax'
+        });
+        console.log('[LOGOUT] Session destroyed and cookie cleared');
+      });
+    }
+
     cookies.clearAuthCookies(res);
     return res.status(200).json({ message: "Logged out" }).end();
+  }
+
+  function me(req, res) {
+    // This endpoint requires authentication (handled by middleware in app.js)
+    if (req.user && req.user.username) {
+      return res.status(200).json({
+        username: req.user.username,
+        videoPath: req.user.videoPath
+      }).end();
+    }
+    return res.status(401).json({ message: "Not authenticated" }).end();
   }
 
   return router;

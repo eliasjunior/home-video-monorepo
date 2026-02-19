@@ -68,25 +68,18 @@ export function createVideosRouter({
 
       logD("videosPath=", videosPath);
       logD("user=", req.user?.username);
-      if (videos.allIds.length === 0) {
-        sendError({
-          response,
-          message: `No videos were found. Expected movies under ${videosPath}/${appConfig.moviesDir}/<MovieFolder>/<videoFile>.`,
-          statusCode: 500,
-        });
-      } else {
-        const tempMap = videos.allIds.reduce(
-          (prev, id) => {
-            prev.byId[id] = videos.byId[id];
-            prev.allIds.push(id);
-            return prev;
-          },
-          { byId: {}, allIds: [] }
-        );
-        setMovieMap(tempMap);
 
-        flushJSON(response, videos);
-      }
+      const tempMap = videos.allIds.reduce(
+        (prev, id) => {
+          prev.byId[id] = videos.byId[id];
+          prev.allIds.push(id);
+          return prev;
+        },
+        { byId: {}, allIds: [] }
+      );
+      setMovieMap(tempMap);
+
+      flushJSON(response, videos);
     } catch (error) {
       sendError({
         response,
@@ -138,16 +131,8 @@ export function createVideosRouter({
 
     if (movieMap.allIds.length === 0) {
       try {
-        const { moviesPath, videosPath } = getUserPaths(req);
+        const { moviesPath } = getUserPaths(req);
         const videos = getVideos({ baseLocation: moviesPath });
-        if (videos.allIds.length === 0) {
-          sendError({
-            response,
-            message: `No videos were found. Expected movies under ${videosPath}/${appConfig.moviesDir}/<MovieFolder>/<videoFile>.`,
-            statusCode: 500,
-          });
-          return;
-        }
         const tempMap = videos.allIds.reduce(
           (prev, id) => {
             prev.byId[id] = videos.byId[id];

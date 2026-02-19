@@ -1,6 +1,8 @@
 import { logD } from "../common/MessageUtil";
 import { loadRemoteJsonFile } from "../libs/HttpLib";
 import { setMoviesMap } from "../libs/MemoryLib";
+import { createFileWatcherService } from "../services/fileWatcherService.js";
+import { createWebSocketService } from "../services/websocketService.js";
 
 export async function fetchAndLogJsonData({
   remoteJsonUrl,
@@ -63,12 +65,49 @@ export function startServer({
     return null;
   }
 
-  return app.listen(appConfig.port, async () => {
-    consoleRef.log(`Application started, ${appConfig.serverUrl}`);
+  const server = app.listen(appConfig.port, async () => {
+    consoleRef.log(`Application started, ${appConfig.serverUrl}${appConfig.publicUrl}`);
     consoleRef.log("App config");
     consoleRef.log(`Movies folder: ${appConfig.moviesDir}`);
     consoleRef.log(`baseLocation: ${appConfig.baseLocation}`);
     await initializeImageMapFn({ appConfig, env, consoleRef });
+
+    // Initialize file watcher for automatic updates
+    const fileWatcherEnabled = env.FILE_WATCHER_ENABLED !== 'false';
+    if (fileWatcherEnabled) {
+      consoleRef.log('[FILE_WATCHER] Initializing file system monitoring...');
+
+      const fileWatcher = createFileWatcherService({
+        baseVideosPath: appConfig.videosPath,
+        moviesDir: appConfig.moviesDir,
+        seriesDir: appConfig.seriesDir
+      });
+
+      fileWatcher.startWatching();
+
+      // Initialize WebSocket server
+      consoleRef.log('[WS] Initializing WebSocket server...');
+      const publicUrl = (appConfig.publicUrl || '').replace(/\/$/, '');
+      const wsService = createWebSocketService({
+        server,
+        fileWatcher,
+        publicUrl
+      });
+
+      const wsPath = publicUrl ? `${publicUrl}/ws` : '/ws';
+      consoleRef.log(`[WS] WebSocket server started at ws://localhost:${appConfig.port}${wsPath}`);
+
+      // Cleanup on server close
+      server.on('close', () => {
+        consoleRef.log('[SERVER] Shutting down...');
+        fileWatcher.stopWatching();
+        wsService.close();
+      });
+    } else {
+      consoleRef.log('[FILE_WATCHER] File system monitoring disabled');
+    }
   });
+
+  return server;
 }
 

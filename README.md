@@ -72,6 +72,7 @@ VIDEO_PATH=/mnt-host           # Path to video files
 MOVIES_DIR=Movies              # Movies subdirectory
 SERIES_DIR=Series              # Series subdirectory
 MULTI_USER_ENABLED=false       # Enable per-user video directories
+FILE_WATCHER_ENABLED=true      # Enable file system monitoring and WebSocket updates
 ```
 
 **Authentication:**
@@ -145,6 +146,25 @@ The application supports **per-user video libraries** for multi-tenant deploymen
 ```
 
 **User Data Storage**: Application-level users are stored in `data/users.json` (no OS users created)
+
+### Real-Time Updates
+
+The application features **automatic page updates** when video files are added or removed:
+
+- **WebSocket Integration**: Real-time communication between server and clients
+- **File System Monitoring**: Automatically detects changes in video directories using Node.js `fs.watch`
+- **User-Specific Notifications**: In multi-user mode, each user only receives updates for their own videos
+- **Auto-Reconnection**: Client automatically reconnects if connection is lost
+- **Configurable**: Enable/disable via `FILE_WATCHER_ENABLED=true` (enabled by default)
+- **PUBLIC_URL Support**: WebSocket endpoint respects PUBLIC_URL configuration
+
+**How it works**: When you add or remove video files in your Movies or Series directories, the page automatically refreshes the video list without requiring a manual page reload.
+
+**Technical Details**:
+- WebSocket endpoint: `ws://your-server:port/your-public-url/ws`
+- File watcher monitors: `/mnt-host/<username>/Movies/` and `/mnt-host/<username>/Series/`
+- Events filtered by username in multi-user mode
+- Reconnection: Max 5 attempts with 3-second delay
 
 ## Documentation
 

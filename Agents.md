@@ -118,6 +118,25 @@ The application supports **application-level multi-tenancy** for isolated user v
       └── Series/
 ```
 
+### Real-Time Updates with WebSocket
+
+The application supports **real-time automatic page updates** when video files are added or removed:
+
+- **File Watching**: Monitors video directories for file system changes using Node.js `fs.watch`
+- **WebSocket Broadcasting**: Broadcasts file change events to connected clients
+- **User-Specific Events**: In multi-user mode, only notifies users when their own videos change
+- **Auto-Reconnection**: Client automatically reconnects if WebSocket connection is lost (max 5 attempts, 3s delay)
+- **Configurable**: Enable/disable via `FILE_WATCHER_ENABLED` environment variable (default: true)
+- **PUBLIC_URL Support**: WebSocket path respects PUBLIC_URL configuration (e.g., `/home-video/ws`)
+
+**How it works**:
+1. File watcher detects changes in user directories (`/mnt-host/<username>/Movies/` or `/mnt-host/<username>/Series/`)
+2. WebSocket server broadcasts events with username and category (movies/series)
+3. Connected clients filter events by username and refresh their video list automatically
+4. No page refresh needed when adding/removing video files
+
+**WebSocket Connection**: `ws://localhost:8081/home-video/ws` (or your configured PUBLIC_URL)
+
 ### Key Implementation Files
 
 **Authentication:**
@@ -134,9 +153,17 @@ The application supports **application-level multi-tenancy** for isolated user v
 9. **`apps/api/src/routers/ImagesRouter.js`** - User-specific image serving
 10. **`apps/api/src/routers/CaptionsRouter.js`** - User-specific caption serving
 
+**WebSocket & Real-Time:**
+11. **`apps/api/src/services/fileWatcherService.js`** - File system monitoring service
+12. **`apps/api/src/services/websocketService.js`** - WebSocket server and broadcasting
+13. **`apps/api/src/composition/startup.js`** - WebSocket and file watcher initialization
+14. **`apps/web/src/hooks/useWebSocket.js`** - React WebSocket hook with auto-reconnect
+15. **`apps/web/src/components/video/components/VideoMainList.jsx`** - User-filtered real-time updates
+
 **Frontend:**
-11. **`apps/web/src/config.js`** - API URL configuration with PUBLIC_URL support
-12. **`apps/web/src/main/Routers.js`** - React Router with basename configuration
+16. **`apps/web/src/config.js`** - API URL configuration with PUBLIC_URL support
+17. **`apps/web/src/main/Routers.js`** - React Router with basename configuration
+18. **`apps/web/src/services/Api.js`** - API client with getCurrentUser() for WebSocket filtering
 
 ### Environment Configuration
 
@@ -171,6 +198,7 @@ LOGIN_SECOND_RETRY_URL=http://localhost:8080/api/authenticate  # External auth s
 # Application Configuration
 PUBLIC_URL=/home-video           # URL prefix for app and API endpoints
 MULTI_USER_ENABLED=false        # Enable per-user video directories
+FILE_WATCHER_ENABLED=true       # Enable file system monitoring and WebSocket updates
 ```
 
 ---

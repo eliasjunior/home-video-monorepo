@@ -69,7 +69,7 @@ export default function config() {
   result.seriesDir = SERIES_DIR;
   result.baseLocation = os.homedir();
   result.serverUrl = `${result.protocol}://${result.host}:${result.port}`;
-  result.publicUrl = PUBLIC_URL || '/';
+  result.publicUrl = PUBLIC_URL || '';
   const fallbackBaseCandidate =
     IMAGE_FALLBACK_BASE_URL || `${result.serverUrl}/public`;
   result.imageFallbackBaseUrl = normalizeFallbackBaseUrl(fallbackBaseCandidate);

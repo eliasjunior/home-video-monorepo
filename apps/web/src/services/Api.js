@@ -36,8 +36,9 @@ async function requestWithAuth(path, options = {}) {
   if (response.status === 401) {
     const publicUrl = process.env.PUBLIC_URL || '/home-video';
     const loginPath = `${publicUrl}/login`;
-    if (window.location.pathname !== loginPath) {
-      window.location.assign(loginPath);
+    const currentPath = window.location.pathname;
+    if (currentPath !== loginPath && !currentPath.endsWith('/login')) {
+      window.location.href = loginPath;
     }
   }
 
@@ -71,8 +72,9 @@ async function requestBlobWithAuth(path, options = {}) {
   if (res.status === 401) {
     const publicUrl = process.env.PUBLIC_URL || '/home-video';
     const loginPath = `${publicUrl}/login`;
-    if (window.location.pathname !== loginPath) {
-      window.location.assign(loginPath);
+    const currentPath = window.location.pathname;
+    if (currentPath !== loginPath && !currentPath.endsWith('/login')) {
+      window.location.href = loginPath;
     }
   }
 
@@ -87,4 +89,12 @@ async function requestBlobWithAuth(path, options = {}) {
 export async function getBlobUrl(path, options = {}) {
   const { blob } = await requestBlobWithAuth(path, options);
   return URL.createObjectURL(blob);
+}
+
+export async function getCurrentUser() {
+  const response = await requestWithAuth('auth/me');
+  if (response.status === 200 && response.username) {
+    return response;
+  }
+  throw new Error('Failed to fetch current user');
 }

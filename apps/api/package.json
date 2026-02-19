@@ -44,7 +44,8 @@
     "jwks-rsa": "^3.2.1",
     "nodemon": "^3.1.11",
     "redis": "^4.7.0",
-    "subsrt": "^1.1.1"
+    "subsrt": "^1.1.1",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "eslint": "^10.0.0",
