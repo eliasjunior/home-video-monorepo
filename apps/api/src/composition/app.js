@@ -76,6 +76,13 @@ export function createApp({ appConfig, env = process.env, sessionMiddleware = nu
     if (req.path.startsWith("/health")) return next();
     if (req.path.startsWith("/favicon.ico")) return next();
 
+    // Skip auth for WebSocket upgrade requests
+    const wsPath = publicUrl ? `${publicUrl}/ws` : '/ws';
+    if (req.path === wsPath || req.path.startsWith(`${wsPath}/`)) {
+      console.log(`[AUTH] Skipping auth for WebSocket path: ${req.path}`);
+      return next();
+    }
+
     // Check if this is an API route that needs authentication
     const pathWithoutPublicUrl = publicUrl ? req.path.replace(publicUrl, '') : req.path;
     const isApiRoute = pathWithoutPublicUrl.match(/^\/(videos|images|captions|progress|series)/);

@@ -18,6 +18,8 @@ services:
       dockerfile: ./api/Dockerfile
       args:
         PUBLIC_URL: /home-video
+        REACT_APP_LOGIN_SECOND_RETRY: "true"
+        REACT_APP_LOGIN_SECOND_RETRY_URL: "http://host.docker.internal:8080/api/authenticate"
     env_file:
       - ./.env.docker.api.prod
     environment:
@@ -34,6 +36,7 @@ services:
       - LOGIN_SECOND_RETRY=true
       - LOGIN_SECOND_RETRY_URL=http://host.docker.internal:8080/api/authenticate
       - LOGIN_SECOND_RETRY_CSRF_URL=http://host.docker.internal:8080/api/csrf
+      - OAUTH2_GOOGLE_URL=http://host.docker.internal:8080/oauth2/authorization/google
       - MULTI_USER_ENABLED=true
       - FILE_WATCHER_ENABLED=true
     ports:

@@ -5,7 +5,29 @@ export function createWebSocketService({ server, fileWatcher, publicUrl = '' }) 
   const wsPath = publicUrl ? `${publicUrl}/ws` : '/ws';
   const wss = new WebSocketServer({
     server,
-    path: wsPath
+    path: wsPath,
+    // Verify client connection
+    verifyClient: (info, callback) => {
+      // Log the upgrade request
+      console.log(`[WS] WebSocket upgrade request from: ${info.req.socket.remoteAddress}`);
+      console.log(`[WS] Request path: ${info.req.url}`);
+      console.log(`[WS] Request headers:`, {
+        'sec-websocket-key': info.req.headers['sec-websocket-key'],
+        'sec-websocket-version': info.req.headers['sec-websocket-version'],
+        'upgrade': info.req.headers['upgrade'],
+        'connection': info.req.headers['connection']
+      });
+
+      // Check if required headers are present
+      if (!info.req.headers['sec-websocket-key']) {
+        console.error('[WS] Missing Sec-WebSocket-Key header');
+        callback(false, 400, 'Missing Sec-WebSocket-Key header');
+        return;
+      }
+
+      // Accept the connection
+      callback(true);
+    }
   });
 
   logD(`[WS] WebSocket server listening on path: ${wsPath}`);

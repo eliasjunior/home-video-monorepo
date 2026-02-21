@@ -29,6 +29,15 @@ export async function login({ username, password }) {
   return { status: res.status, ...body };
 }
 
+export async function getCsrfToken() {
+  const res = await fetch(`${SERVER_URL}/auth/csrf`, {
+    method: "GET",
+    credentials: "include",
+  });
+  const body = await parseJsonSafe(res);
+  return body;
+}
+
 export async function refreshTokens() {
   const csrf = getCookie("csrf_token");
   const res = await fetch(`${SERVER_URL}/auth/refresh`, {
@@ -65,4 +74,13 @@ export async function checkAuthentication() {
   });
   const body = await parseJsonSafe(res);
   return { status: res.status, ...body };
+}
+
+export async function getOAuth2Config() {
+  const res = await fetch(`${SERVER_URL}/auth/oauth2-config`, {
+    method: "GET",
+    credentials: "include",
+  });
+  const body = await parseJsonSafe(res);
+  return body;
 }

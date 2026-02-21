@@ -45,6 +45,130 @@ class SpringSessionStore extends Store {
         console.log(`[SPRING_SESSION] Found principalName: ${principalName}`);
       }
 
+      // Check for JWT token in session attributes (common pattern for JWT-based auth)
+      // Try multiple possible keys where JWT might be stored
+      const possibleJwtKeys = [
+        "sessionAttr:jwtToken",
+        "sessionAttr:token",
+        "sessionAttr:accessToken",
+        "sessionAttr:jwt",
+        "sessionAttr:bearerToken"
+      ];
+
+      let jwtToken = null;
+      let jwtKey = null;
+      for (const key of possibleJwtKeys) {
+        if (data[key]) {
+          jwtToken = data[key];
+          jwtKey = key;
+          break;
+        }
+      }
+
+      // Also check all sessionAttr keys for anything that looks like a JWT
+      if (!jwtToken) {
+        for (const key of Object.keys(data)) {
+          if (key.startsWith('sessionAttr:') && data[key]) {
+            const value = data[key];
+            // JWT tokens have 3 parts separated by dots
+            if (typeof value === 'string' && value.split('.').length === 3) {
+              jwtToken = value;
+              jwtKey = key;
+              console.log(`[SPRING_SESSION] Found JWT-like token in key: ${key}`);
+              break;
+            }
+          }
+        }
+      }
+
+      if (jwtToken) {
+        console.log(`[SPRING_SESSION] Found JWT token in ${jwtKey}, attempting to decode...`);
+        console.log(`[SPRING_SESSION] Token type: ${typeof jwtToken}`);
+        console.log(`[SPRING_SESSION] Token sample (first 100 chars): ${typeof jwtToken === 'string' ? jwtToken.substring(0, 100) : JSON.stringify(jwtToken).substring(0, 100)}`);
+
+        try {
+          let tokenValue = jwtToken;
+
+          // Check if jwtToken is an object with a tokenValue field
+          if (typeof jwtToken === 'string') {
+            // Handle escaped JSON strings (e.g., "{\"tokenValue\":\"eyJhbGc...\"}")
+            let unescapedToken = jwtToken;
+            if (jwtToken.includes('\\"')) {
+              console.log(`[SPRING_SESSION] Token contains escaped quotes, unescaping...`);
+              // Remove leading/trailing quotes if present
+              unescapedToken = jwtToken.replace(/^"/, '').replace(/"$/, '');
+              // Unescape JSON
+              unescapedToken = unescapedToken.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+            }
+
+            try {
+              const parsedToken = JSON.parse(unescapedToken);
+              if (parsedToken.tokenValue) {
+                console.log(`[SPRING_SESSION] Found tokenValue field in parsed token object`);
+                tokenValue = parsedToken.tokenValue;
+              }
+            } catch (parseErr) {
+              console.log(`[SPRING_SESSION] Not a JSON object, treating as raw token value`);
+              // Not JSON, use as-is
+              tokenValue = jwtToken;
+            }
+          } else if (typeof jwtToken === 'object' && jwtToken.tokenValue) {
+            console.log(`[SPRING_SESSION] Found tokenValue field in token object`);
+            tokenValue = jwtToken.tokenValue;
+          }
+
+          // JWT tokens are typically base64url encoded in 3 parts: header.payload.signature
+          const parts = tokenValue.split('.');
+          if (parts.length === 3) {
+            // Decode the payload (second part)
+            const payload = parts[1];
+            // Base64url to Base64 conversion
+            const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+            const decoded = Buffer.from(base64, 'base64').toString('utf8');
+            const claims = JSON.parse(decoded);
+
+            console.log(`[SPRING_SESSION] JWT claims:`, claims);
+
+            // Extract username from 'sub' claim
+            if (claims.sub) {
+              const username = claims.sub;
+              const authorities = claims.authorities || claims.roles || ["ROLE_USER"];
+
+              console.log(`[SPRING_SESSION] Extracted username from JWT sub claim: ${username}`);
+
+              // Return session immediately with JWT data
+              const session = {
+                authenticated: true,
+                user: {
+                  id: username,
+                  username: username,
+                  email: username,
+                  authorities: Array.isArray(authorities) ? authorities : [authorities],
+                  accountNonLocked: true,
+                  accountNonExpired: true,
+                  credentialsNonExpired: true,
+                  enabled: true,
+                },
+                creationTime: data.creationTime,
+                lastAccessedTime: data.lastAccessedTime,
+                maxInactiveInterval: data.maxInactiveInterval,
+                cookie: {
+                  originalMaxAge: this.ttl * 1000,
+                  expires: new Date(Date.now() + this.ttl * 1000),
+                  httpOnly: true,
+                  path: "/",
+                },
+              };
+
+              return callback(null, session);
+            }
+          }
+        } catch (jwtError) {
+          console.error(`[SPRING_SESSION] Failed to decode JWT token:`, jwtError.message);
+          console.error(`[SPRING_SESSION] JWT error stack:`, jwtError.stack);
+        }
+      }
+
       // Parse Spring Security Context
       const securityContextKey = "sessionAttr:SPRING_SECURITY_CONTEXT";
       const securityContextData = data[securityContextKey];

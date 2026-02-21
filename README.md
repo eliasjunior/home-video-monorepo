@@ -97,6 +97,9 @@ SESSION_COOKIE_NAME=SESSION
 # Login Second Retry (fallback to external auth service)
 LOGIN_SECOND_RETRY=false
 LOGIN_SECOND_RETRY_URL=http://auth-service:8080/api/authenticate
+
+# OAuth2 Integration
+OAUTH2_GOOGLE_URL=http://auth-service:8080/oauth2/authorization/google
 ```
 
 See `.env.docker.api.prod` for all available options.
@@ -111,9 +114,13 @@ The application supports multiple authentication methods:
 2. **JWKS Validation** - Validates tokens from external auth services (supports both symmetric and asymmetric keys)
 3. **Spring Session SSO** - Integrates with Spring Boot applications via Redis-backed sessions
 4. **Login Second Retry** - Falls back to external authentication service if local validation fails
-   - Configurable via `LOGIN_SECOND_RETRY` environment variable
-   - POSTs credentials to external service and extracts token from response headers
+   - Two-step authentication flow: fetches CSRF token, then authenticates with CSRF header
+   - Supports dynamic CSRF header names (e.g., `X-XSRF-TOKEN`, `X-CSRF-TOKEN`)
+   - Configurable via `LOGIN_SECOND_RETRY` and `LOGIN_SECOND_RETRY_URL` environment variables
    - Useful for hybrid authentication scenarios
+5. **Google OAuth2** - Optional "Sign in with Google" button
+   - Configurable via `OAUTH2_GOOGLE_URL` environment variable
+   - Redirects to external OAuth2 authorization endpoint
 
 ### Merged Application
 

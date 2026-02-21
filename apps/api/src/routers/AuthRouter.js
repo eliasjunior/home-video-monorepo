@@ -53,6 +53,7 @@ export function createAuthRouter({
   router.post("/refresh", refresh);
   router.post("/logout", logout);
   router.get("/me", requireAuth || ((req, res, next) => next()), me);
+  router.get("/oauth2-config", getOAuth2Config);
 
   async function login(req, res) {
     const { username, password } = req.body || {};
@@ -93,15 +94,16 @@ export function createAuthRouter({
 
               // Step 2: Call external authentication service with CSRF token
               const headers = {
-                "Content-Type": "application/json",
+                "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+                'X-XSRF-TOKEN': csrfToken
               };
-              headers[csrfHeaderName] = csrfToken;
+              const loginForm = "username=" + encodeURIComponent(username) + '&password=' + encodeURIComponent(password);
 
               const response = await fetch(secondRetryUrl, {
                 method: "POST",
                 headers,
                 credentials: "include",
-                body: JSON.stringify({ username, password }),
+                body: loginForm,
               });
 
               if (response.ok) {
@@ -213,20 +215,27 @@ export function createAuthRouter({
 
     const { refreshToken: refreshTokenBody } = req.body || {};
     const refreshToken = refreshTokenBody || getCookie(req, COOKIE_REFRESH);
-    if (!refreshToken) {
-      console.log('[LOGOUT] Missing refresh token');
+    const ssoRedisEnabled = process.env.SSO_REDIS_ENABLED === 'true';
+
+    // When using SSO Redis session, refresh token is optional (user authenticated via external SSO)
+    if (!refreshToken && !ssoRedisEnabled) {
+      console.log('[LOGOUT] Missing refresh token and SSO not enabled');
       return res.status(400).json({ message: "Missing refresh token" }).end();
     }
-    if (
-      !refreshTokenBody &&
-      !ensureCsrf({ req, res, cookieName: COOKIE_CSRF })
-    ) {
+
+    // For JWT-based logout with CSRF protection
+    if (refreshToken && !refreshTokenBody && !ensureCsrf({ req, res, cookieName: COOKIE_CSRF })) {
       console.log('[LOGOUT] CSRF validation failed');
       return;
     }
 
-    console.log('[LOGOUT] Revoking refresh token');
-    authSessionService.revokeRefreshSession({ refreshToken });
+    // Revoke refresh token if present (JWT-based sessions)
+    if (refreshToken) {
+      console.log('[LOGOUT] Revoking refresh token');
+      authSessionService.revokeRefreshSession({ refreshToken });
+    } else {
+      console.log('[LOGOUT] No refresh token, using SSO session logout');
+    }
 
     // Destroy session if it exists (deletes from Redis if SSO_REDIS_ENABLED=true)
     if (req.session) {
@@ -284,6 +293,22 @@ export function createAuthRouter({
       }).end();
     }
     return res.status(401).json({ message: "Not authenticated" }).end();
+  }
+
+  function getOAuth2Config(req, res) {
+    // Return OAuth2 configuration for the frontend
+    const oauth2GoogleUrl = process.env.OAUTH2_GOOGLE_URL;
+
+    if (!oauth2GoogleUrl) {
+      return res.status(200).json({
+        enabled: false
+      }).end();
+    }
+
+    return res.status(200).json({
+      enabled: true,
+      googleUrl: oauth2GoogleUrl
+    }).end();
   }
 
   return router;

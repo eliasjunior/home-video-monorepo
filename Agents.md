@@ -77,11 +77,14 @@ The backend supports **four authentication methods**:
 
 4. **Login Second Retry**
    - Fallback authentication mechanism when local validation fails
-   - POSTs credentials to external authentication service
-   - Extracts token from response headers (`Authorization: Bearer <token>` or `X-Auth-Token`)
-   - Issues local JWT tokens and creates session
-   - Configurable via `LOGIN_SECOND_RETRY` environment variable
-   - External service URL: `LOGIN_SECOND_RETRY_URL`
+   - Two-step authentication flow:
+     1. Fetches CSRF token from external service (`{base_url}/csrf`)
+     2. POSTs credentials to external authentication service with CSRF header
+   - Supports dynamic CSRF header names (e.g., `X-XSRF-TOKEN`, `X-CSRF-TOKEN`)
+   - Uses `application/x-www-form-urlencoded` content type for authentication
+   - Client-side implementation in React login component
+   - Configurable via `LOGIN_SECOND_RETRY` and `LOGIN_SECOND_RETRY_URL` environment variables
+   - External service URL example: `http://auth-service:8080/api/authenticate`
 
 ### Merged Application
 
@@ -194,6 +197,9 @@ SPRING_SESSION_PREFIX=spring:session:sessions:  # Redis key prefix
 # Login Second Retry
 LOGIN_SECOND_RETRY=false        # Enable second retry authentication
 LOGIN_SECOND_RETRY_URL=http://localhost:8080/api/authenticate  # External auth service URL
+
+# OAuth2 Integration
+OAUTH2_GOOGLE_URL=              # Google OAuth2 authorization URL (e.g., http://auth-service:8080/oauth2/authorization/google)
 
 # Application Configuration
 PUBLIC_URL=/home-video           # URL prefix for app and API endpoints
