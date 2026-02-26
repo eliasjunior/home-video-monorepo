@@ -39,9 +39,11 @@ services:
       - OAUTH2_GOOGLE_URL=http://host.docker.internal:8080/oauth2/authorization/google
       - MULTI_USER_ENABLED=true
       - FILE_WATCHER_ENABLED=true
-      - NEXTCLOUD_SYNC_ENABLED=true
+      - NEXTCLOUD_SYNC_ENABLED=false
       - NEXTCLOUD_DATA_PATH=/tmp #/var/snap/nextcloud/common/nextcloud/data
-      - NEXTCLOUD_SYNC_EXISTING=true
+      - NEXTCLOUD_SYNC_EXISTING=false
+      - NEXTCLOUD_AUTH_ENABLED=true
+      - NEXTCLOUD_URL=https://spendingbetter.com/nextcloud
     ports:
       - "8081:8081"
     volumes:

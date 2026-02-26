@@ -10,6 +10,7 @@ import { MOVIE_CATEG, SERIES_CATEG } from "common/constants";
 import { HAS_ERROR } from "main/Reducer";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { getCurrentUser } from "../../../services/Api";
+import { getSharedVideoFiles } from "../../../services/auth";
 
 function VideoMainList({ history, dispatch }) {
   const [movieMap, setMovieMap] = useState({});
@@ -20,6 +21,7 @@ function VideoMainList({ history, dispatch }) {
   const [query, setQuery] = useState(MOVIE_CATEG);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
+  const [nextcloudVideos, setNextcloudVideos] = useState([]);
 
   // Fetch current user on mount
   useEffect(() => {
@@ -36,11 +38,20 @@ function VideoMainList({ history, dispatch }) {
   }, []);
 
   useEffect(() => {
-    if (query === MOVIE_CATEG) {
-      fetchMovies();
-    } else {
-      fetchSeries();
+    async function loadData() {
+      // Fetch Nextcloud videos first
+      const ncVideos = await fetchNextcloudVideos();
+      setNextcloudVideos(ncVideos);
+
+      // Then fetch movies or series, passing Nextcloud videos directly
+      if (query === MOVIE_CATEG) {
+        await fetchMovies(ncVideos);
+      } else {
+        await fetchSeries();
+      }
     }
+
+    loadData();
   }, [query]);
 
   // WebSocket connection for real-time updates
@@ -73,14 +84,70 @@ function VideoMainList({ history, dispatch }) {
     }
   });
 
-  async function fetchMovies() {
+  async function fetchNextcloudVideos() {
+    const nextcloudEnabled = sessionStorage.getItem('nextcloud_auth_enabled') === 'true';
+    if (!nextcloudEnabled) {
+      console.log('[VideoMainList] Nextcloud integration not enabled');
+      return [];
+    }
+
+    try {
+      const username = sessionStorage.getItem('nextcloud_username');
+      const appPassword = sessionStorage.getItem('nextcloud_app_password');
+
+      if (!username || !appPassword) {
+        console.log('[VideoMainList] No Nextcloud credentials found');
+        return [];
+      }
+
+      console.log('[VideoMainList] Fetching Nextcloud shared videos...');
+      const result = await getSharedVideoFiles({ username, appPassword });
+
+      if (result.success && result.files) {
+        console.log(`[VideoMainList] Found ${result.files.length} shared videos from Nextcloud`);
+        return result.files;
+      } else {
+        console.error('[VideoMainList] Failed to fetch Nextcloud videos:', result.error);
+        return [];
+      }
+    } catch (err) {
+      console.error('[VideoMainList] Error fetching Nextcloud videos:', err);
+      return [];
+    }
+  }
+
+  async function fetchMovies(ncVideos = []) {
     setIsLoading(true);
     try {
       const { allIds, byId, error } = await getPosters();
       if (!error) {
+        // Merge local videos with Nextcloud shared videos
+        const mergedById = { ...byId };
+        const mergedAllIds = [...allIds];
+
+        // Add Nextcloud videos to the map (use parameter, not state)
+        const videosToMerge = ncVideos.length > 0 ? ncVideos : nextcloudVideos;
+        console.log(`[VideoMainList] Merging ${videosToMerge.length} Nextcloud videos with ${allIds.length} local videos`);
+
+        videosToMerge.forEach((ncVideo) => {
+          const videoId = `nextcloud-${ncVideo.fileId}`;
+          mergedById[videoId] = {
+            id: videoId,
+            title: ncVideo.fileName.replace(/^\//, ''),
+            folder: `Shared by ${ncVideo.ownerDisplayName}`,
+            isNextcloudShare: true,
+            nextcloudData: ncVideo,
+            // Use Nextcloud file URL for streaming
+            fileName: ncVideo.fileName
+          };
+          mergedAllIds.push(videoId);
+        });
+
+        console.log(`[VideoMainList] Total videos after merge: ${mergedAllIds.length}`);
+
         // order matters https://reactjs.org/docs/hooks-rules.html
-        setMovieMap(byId);
-        setAllMovieIds(allIds);
+        setMovieMap(mergedById);
+        setAllMovieIds(mergedAllIds);
       } else {
         dispatch({ type: HAS_ERROR, payload: error });
       }

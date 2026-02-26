@@ -105,6 +105,13 @@ OAUTH2_GOOGLE_URL=http://auth-service:8080/oauth2/authorization/google
 NEXTCLOUD_SYNC_ENABLED=false
 NEXTCLOUD_DATA_PATH=/var/snap/nextcloud/common/nextcloud/data
 NEXTCLOUD_SYNC_EXISTING=false
+
+# Nextcloud Authentication (Optional)
+NEXTCLOUD_AUTH_ENABLED=false
+NEXTCLOUD_URL=https://nextcloud.example.com
+OAUTH2_NEXTCLOUD_SSO_URL=https://nextcloud.example.com/apps/oauth2/authorize
+# Nextcloud session prefix (nc_session: for native, spring:session:sessions: for Spring)
+NEXTCLOUD_SESSION_PREFIX=nc_session:
 ```
 
 See `.env.docker.api.prod` for all available options.
@@ -126,6 +133,12 @@ The application supports multiple authentication methods:
 5. **Google OAuth2** - Optional "Sign in with Google" button
    - Configurable via `OAUTH2_GOOGLE_URL` environment variable
    - Redirects to external OAuth2 authorization endpoint
+6. **Nextcloud Authentication** - Three authentication methods for Nextcloud integration:
+   - **App Password**: WebDAV authentication using Nextcloud app passwords
+   - **SSO**: OAuth2 single sign-on integration with Nextcloud
+   - **Redis Session**: Automatic authentication by checking Nextcloud sessions in Redis
+   - Configurable via `NEXTCLOUD_AUTH_ENABLED`, `NEXTCLOUD_URL`, and related environment variables
+   - Seamlessly integrates with Nextcloud user accounts
 
 ### Merged Application
 

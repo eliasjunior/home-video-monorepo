@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useHistory } from "react-router-dom";
 import "./login.css";
-import { login, checkAuthentication, getOAuth2Config, getCsrfToken } from "services/auth";
+import { login, checkAuthentication, getOAuth2Config, getNextcloudConfig, loginWithNextcloud, getCsrfToken } from "services/auth";
 
 export default function Login() {
   const history = useHistory();
@@ -12,6 +12,8 @@ export default function Login() {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [oauth2Config, setOAuth2Config] = useState({ enabled: false });
+  const [nextcloudConfig, setNextcloudConfig] = useState({ enabled: false });
+  const [isNextcloudMode, setIsNextcloudMode] = useState(false);
 
   // Check if user is already authenticated and load OAuth2 config on component mount
   useEffect(() => {
@@ -39,8 +41,18 @@ export default function Login() {
       }
     };
 
+    const loadNextcloudConfig = async () => {
+      try {
+        const config = await getNextcloudConfig();
+        setNextcloudConfig(config);
+      } catch (err) {
+        console.error("Failed to load Nextcloud config:", err);
+      }
+    };
+
     checkAuth();
     loadOAuth2Config();
+    loadNextcloudConfig();
   }, [history]);
 
   const onSubmit = async (ev) => {
@@ -48,6 +60,24 @@ export default function Login() {
     setError("");
     setIsSubmitting(true);
     try {
+      // Check if Nextcloud mode
+      if (isNextcloudMode) {
+        const resp = await loginWithNextcloud({ username, appPassword: password });
+
+        if (resp.status && resp.status < 400) {
+          // Store Nextcloud credentials for fetching shares
+          sessionStorage.setItem('nextcloud_username', username);
+          sessionStorage.setItem('nextcloud_app_password', password);
+          sessionStorage.setItem('nextcloud_auth_enabled', 'true');
+
+          history.push("/");
+          return;
+        }
+
+        setError(resp.message || "Invalid Nextcloud credentials");
+        return;
+      }
+
       // First attempt: Try regular login
       const resp = await login({ username, password });
 
@@ -140,6 +170,21 @@ export default function Login() {
     <div className="login">
       <form className="login-card" onSubmit={onSubmit}>
         <h1>Sign in</h1>
+
+        {nextcloudConfig.enabled && nextcloudConfig.appPasswordEnabled && (
+          <div style={{ marginBottom: "15px" }}>
+            <label style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={isNextcloudMode}
+                onChange={(e) => setIsNextcloudMode(e.target.checked)}
+                style={{ marginRight: "8px" }}
+              />
+              Use Nextcloud App Password
+            </label>
+          </div>
+        )}
+
         <label htmlFor="username">Username</label>
         <input
           id="username"
@@ -148,14 +193,16 @@ export default function Login() {
           onChange={(ev) => setUsername(ev.target.value)}
           autoComplete="username"
         />
-        <label htmlFor="password">Password</label>
+        <label htmlFor="password">
+          {isNextcloudMode ? "Nextcloud App Password" : "Password"}
+        </label>
         <div className="login-password">
           <input
             id="password"
             type={isPasswordVisible ? "text" : "password"}
             value={password}
             onChange={(ev) => setPassword(ev.target.value)}
-            autoComplete="current-password"
+            autoComplete={isNextcloudMode ? "off" : "current-password"}
           />
           <button
             type="button"
@@ -170,25 +217,41 @@ export default function Login() {
           {isSubmitting ? "Signing in..." : "Sign in"}
         </button>
 
-        {oauth2Config.enabled && oauth2Config.googleUrl && (
+        {(oauth2Config.enabled && oauth2Config.googleUrl) || (nextcloudConfig.enabled && nextcloudConfig.ssoEnabled) ? (
           <>
             <div className="login-divider">
               <span>OR</span>
             </div>
-            <a
-              href={oauth2Config.googleUrl}
-              className="login-google-button"
-            >
-              <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-                <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
-                <path d="M9.003 18c2.43 0 4.467-.806 5.956-2.18L12.05 13.56c-.806.54-1.836.86-3.047.86-2.344 0-4.328-1.584-5.036-3.711H.96v2.332C2.44 15.983 5.485 18 9.003 18z" fill="#34A853"/>
-                <path d="M3.964 10.712c-.18-.54-.282-1.117-.282-1.71 0-.593.102-1.17.282-1.71V4.96H.957C.347 6.175 0 7.55 0 9.002c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-                <path d="M9.003 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.464.891 11.426 0 9.003 0 5.485 0 2.44 2.017.96 4.958L3.967 7.29c.708-2.127 2.692-3.71 5.036-3.71z" fill="#EA4335"/>
-              </svg>
-              Sign in with Google
-            </a>
+
+            {oauth2Config.enabled && oauth2Config.googleUrl && (
+              <a
+                href={oauth2Config.googleUrl}
+                className="login-google-button"
+              >
+                <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
+                  <path d="M9.003 18c2.43 0 4.467-.806 5.956-2.18L12.05 13.56c-.806.54-1.836.86-3.047.86-2.344 0-4.328-1.584-5.036-3.711H.96v2.332C2.44 15.983 5.485 18 9.003 18z" fill="#34A853"/>
+                  <path d="M3.964 10.712c-.18-.54-.282-1.117-.282-1.71 0-.593.102-1.17.282-1.71V4.96H.957C.347 6.175 0 7.55 0 9.002c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+                  <path d="M9.003 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.464.891 11.426 0 9.003 0 5.485 0 2.44 2.017.96 4.958L3.967 7.29c.708-2.127 2.692-3.71 5.036-3.71z" fill="#EA4335"/>
+                </svg>
+                Sign in with Google
+              </a>
+            )}
+
+            {nextcloudConfig.enabled && nextcloudConfig.ssoEnabled && nextcloudConfig.ssoUrl && (
+              <a
+                href={nextcloudConfig.ssoUrl}
+                className="login-google-button"
+                style={{ marginTop: "10px", background: "#0082c9" }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="white">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                </svg>
+                Sign in with Nextcloud SSO
+              </a>
+            )}
           </>
-        )}
+        ) : null}
       </form>
     </div>
   );

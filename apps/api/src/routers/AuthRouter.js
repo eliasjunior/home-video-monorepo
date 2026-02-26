@@ -5,11 +5,13 @@ import { createAuthCookieService } from "../auth/authCookieService";
 import { generateCsrfToken } from "../auth/csrfToken";
 import { createAuthLoginService } from "../auth/authLoginService";
 import { createAuthSessionService } from "../auth/authSessionService";
+import { authenticateWithNextcloud, getNextcloudUserInfo, getNextcloudShares, getSharedVideoFiles } from "../auth/nextcloudAuthService.js";
 import config from "../config";
 import { getCookie } from "../common/Util";
 import { ensureCsrf } from "../middleware/csrf";
 import { upsertUser } from "../user/userStore.js";
 import { ensureUserDirectory } from "../user/userDirectory.js";
+import { getRedisClient } from "../auth/redisSessionStore.js";
 
 const COOKIE_ACCESS = "access_token";
 const COOKIE_REFRESH = "refresh_token";
@@ -50,10 +52,14 @@ export function createAuthRouter({
     });
 
   router.post("/login", login);
+  router.post("/login/nextcloud", loginWithNextcloud);
   router.post("/refresh", refresh);
   router.post("/logout", logout);
   router.get("/me", requireAuth || ((req, res, next) => next()), me);
   router.get("/oauth2-config", getOAuth2Config);
+  router.get("/nextcloud-config", getNextcloudConfig);
+  router.post("/nextcloud/shares", requireAuth || ((req, res, next) => next()), getNextcloudSharesEndpoint);
+  router.post("/nextcloud/shared-videos", requireAuth || ((req, res, next) => next()), getSharedVideosEndpoint);
 
   async function login(req, res) {
     const { username, password } = req.body || {};
@@ -242,9 +248,30 @@ export function createAuthRouter({
       const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'connect.sid';
       const sessionId = req.sessionID;
       const ssoRedisEnabled = process.env.SSO_REDIS_ENABLED === 'true';
+      const nextcloudAuthEnabled = process.env.NEXTCLOUD_AUTH_ENABLED === 'true';
 
       console.log(`[LOGOUT] About to destroy session: ${sessionId} (SSO_REDIS_ENABLED=${ssoRedisEnabled})`);
       console.log(`[LOGOUT] Session destroy function type: ${typeof req.session.destroy}`);
+
+      // Also delete Nextcloud session if enabled
+      if (nextcloudAuthEnabled && ssoRedisEnabled && sessionId) {
+        const redisClient = getRedisClient();
+        if (redisClient) {
+          const nextcloudSessionPrefix = process.env.NEXTCLOUD_SESSION_PREFIX || 'nc_session:';
+          const nextcloudSessionKey = `${nextcloudSessionPrefix}${sessionId}`;
+
+          console.log(`[LOGOUT] Attempting to delete Nextcloud session: ${nextcloudSessionKey}`);
+          redisClient.del(nextcloudSessionKey).then(deleted => {
+            if (deleted > 0) {
+              console.log(`[LOGOUT] Deleted Nextcloud session from Redis: ${nextcloudSessionKey}`);
+            } else {
+              console.log(`[LOGOUT] No Nextcloud session found to delete: ${nextcloudSessionKey}`);
+            }
+          }).catch(err => {
+            console.error(`[LOGOUT] Error deleting Nextcloud session:`, err);
+          });
+        }
+      }
 
       req.session.destroy((err) => {
         if (err) {
@@ -309,6 +336,180 @@ export function createAuthRouter({
       enabled: true,
       googleUrl: oauth2GoogleUrl
     }).end();
+  }
+
+  function getNextcloudConfig(req, res) {
+    // Return Nextcloud authentication configuration for the frontend
+    const nextcloudAuthEnabled = process.env.NEXTCLOUD_AUTH_ENABLED === 'true';
+    const nextcloudUrl = process.env.NEXTCLOUD_URL;
+    const nextcloudSsoUrl = process.env.OAUTH2_NEXTCLOUD_SSO_URL;
+
+    return res.status(200).json({
+      enabled: nextcloudAuthEnabled && !!nextcloudUrl,
+      appPasswordEnabled: nextcloudAuthEnabled && !!nextcloudUrl,
+      ssoEnabled: !!nextcloudSsoUrl,
+      ssoUrl: nextcloudSsoUrl,
+      nextcloudUrl: nextcloudUrl
+    }).end();
+  }
+
+  async function loginWithNextcloud(req, res) {
+    const { username, appPassword } = req.body || {};
+
+    if (!username || !appPassword) {
+      return res.status(400).json({ message: "Missing username or app password" }).end();
+    }
+
+    const nextcloudUrl = process.env.NEXTCLOUD_URL;
+    if (!nextcloudUrl) {
+      return res.status(500).json({ message: "Nextcloud authentication not configured" }).end();
+    }
+
+    console.log(`[NEXTCLOUD_AUTH] Attempting login for user: ${username}`);
+
+    // Authenticate with Nextcloud
+    const authResult = await authenticateWithNextcloud({
+      username,
+      appPassword,
+      nextcloudUrl
+    });
+
+    if (!authResult.success) {
+      console.log(`[NEXTCLOUD_AUTH] Authentication failed: ${authResult.error}`);
+      return res.status(401).json({ message: authResult.error || "Invalid credentials" }).end();
+    }
+
+    // Get user info from Nextcloud (optional, for display name and email)
+    const userInfo = await getNextcloudUserInfo({
+      username,
+      appPassword,
+      nextcloudUrl
+    });
+
+    console.log(`[NEXTCLOUD_AUTH] Authentication successful for user: ${username}`);
+
+    // Register user in application store and create directories
+    const appUser = upsertUser(username);
+    ensureUserDirectory(username);
+
+    // Create login session
+    const loginSession = authLoginService.createLoginSession({
+      userId: appUser.id,
+      username: username,
+    });
+
+    cookies.setAuthCookies({ res, session: loginSession });
+
+    // Store authentication context in session if exists
+    if (req.session) {
+      req.session.authenticated = true;
+      req.session.user = {
+        id: appUser.id,
+        username: username,
+        email: userInfo.email || username,
+        displayName: userInfo.displayName || username,
+        authorities: ["ROLE_USER"],
+        videoPath: appUser.videoPath,
+      };
+    }
+
+    console.log(`[NEXTCLOUD_AUTH] Login session created for user: ${username}`);
+    return res.status(200).json({ accessToken: loginSession.accessToken }).end();
+  }
+
+  async function getNextcloudSharesEndpoint(req, res) {
+    try {
+      // Get authenticated user
+      const username = req.user?.username;
+      if (!username) {
+        return res.status(401).json({ message: "Not authenticated" }).end();
+      }
+
+      // Check if Nextcloud auth is enabled
+      const nextcloudAuthEnabled = process.env.NEXTCLOUD_AUTH_ENABLED === 'true';
+      const nextcloudUrl = process.env.NEXTCLOUD_URL;
+
+      if (!nextcloudAuthEnabled || !nextcloudUrl) {
+        return res.status(400).json({ message: "Nextcloud integration not enabled" }).end();
+      }
+
+      // Get credentials and options from request body
+      const { appPassword, options = {} } = req.body || {};
+
+      if (!appPassword) {
+        return res.status(400).json({ message: "App password required" }).end();
+      }
+
+      console.log(`[NEXTCLOUD_SHARES] Proxying shares request for user: ${username}`);
+
+      // Fetch shares using backend function (avoids CORS)
+      const result = await getNextcloudShares({
+        username,
+        appPassword,
+        nextcloudUrl,
+        options
+      });
+
+      if (result.success) {
+        return res.status(200).json(result).end();
+      } else {
+        return res.status(500).json(result).end();
+      }
+
+    } catch (error) {
+      console.error(`[NEXTCLOUD_SHARES] Error in endpoint:`, error);
+      return res.status(500).json({
+        success: false,
+        error: error.message || "Failed to fetch shares"
+      }).end();
+    }
+  }
+
+  async function getSharedVideosEndpoint(req, res) {
+    try {
+      // Get authenticated user
+      const username = req.user?.username;
+      if (!username) {
+        return res.status(401).json({ message: "Not authenticated" }).end();
+      }
+
+      // Check if Nextcloud auth is enabled
+      const nextcloudAuthEnabled = process.env.NEXTCLOUD_AUTH_ENABLED === 'true';
+      const nextcloudUrl = process.env.NEXTCLOUD_URL;
+
+      if (!nextcloudAuthEnabled || !nextcloudUrl) {
+        return res.status(400).json({ message: "Nextcloud integration not enabled" }).end();
+      }
+
+      // Get credentials from request body
+      const { appPassword } = req.body || {};
+
+      if (!appPassword) {
+        return res.status(400).json({ message: "App password required" }).end();
+      }
+
+      console.log(`[NEXTCLOUD_SHARES] Proxying shared videos request for user: ${username}`);
+
+      // Fetch shared videos using backend function (avoids CORS)
+      const result = await getSharedVideoFiles({
+        username,
+        appPassword,
+        nextcloudUrl
+      });
+
+      if (result.success) {
+        return res.status(200).json(result).end();
+      } else {
+        return res.status(500).json(result).end();
+      }
+
+    } catch (error) {
+      console.error(`[NEXTCLOUD_SHARES] Error in endpoint:`, error);
+      return res.status(500).json({
+        success: false,
+        error: error.message || "Failed to fetch shared videos"
+      }).end();
+    }
   }
 
   return router;

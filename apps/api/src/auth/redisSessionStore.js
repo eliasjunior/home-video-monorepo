@@ -212,6 +212,15 @@ export async function createSessionMiddleware() {
         return next();
       }
 
+      // If no Spring session cookie was present at all, skip session middleware
+      // (let auth middleware handle authentication via JWT)
+      if (!springSessionId) {
+        console.log(`[SESSION] No Spring session cookie found, skipping session middleware`);
+        req.session = null;
+        req.sessionID = null;
+        return next();
+      }
+
       // Otherwise, use express-session middleware normally (for non-Spring sessions)
       sessionMiddleware(req, res, next);
     };
@@ -226,6 +235,10 @@ export async function closeRedisConnection() {
     await redisClient.quit();
     console.log("Redis connection closed");
   }
+}
+
+export function getRedisClient() {
+  return redisClient;
 }
 
 export { ssoRedisEnabled, sessionCookieName };

@@ -292,8 +292,9 @@ class SpringSessionStore extends Store {
    * Set session data - Not implemented for read-only SSO
    */
   async set(sessionId, session, callback) {
-    console.log(`[SPRING_SESSION] Set operation not supported (read-only mode)`);
-    callback(new Error("Spring Session store is read-only"));
+    console.log(`[SPRING_SESSION] Set operation called (read-only mode, ignoring)`);
+    // Call callback without error to prevent hanging
+    callback(null);
   }
 
   /**

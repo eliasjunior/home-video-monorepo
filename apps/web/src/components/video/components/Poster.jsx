@@ -10,7 +10,7 @@ export default function Poster({ video, onSetVideo, isSeries }) {
   const { SERVER_URL } = config();
   const [displayEp, setDisplayEp] = useState(false);
   const [imgSrc, setImgSrc] = useState("");
-  const { id, name, fileIds, img } = video;
+  const { id, name, fileIds, img, isNextcloudShare } = video;
 
   useEffect(() => {
     let active = true;
@@ -61,7 +61,24 @@ export default function Poster({ video, onSetVideo, isSeries }) {
             src={imgSrc}
           ></img>
         )}
-        <div className="media-box__img-box--title"> {name}</div>
+        <div className="media-box__img-box--title">
+          {isNextcloudShare && (
+            <span
+              style={{
+                background: '#0082c9',
+                color: 'white',
+                padding: '2px 6px',
+                borderRadius: '3px',
+                fontSize: '0.75em',
+                marginRight: '6px',
+                fontWeight: 'bold'
+              }}
+            >
+              NC
+            </span>
+          )}
+          {name}
+        </div>
       </div>
 
       {isSeries && displayEp ? (

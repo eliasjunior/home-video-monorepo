@@ -3,19 +3,27 @@ import { logD } from "../common/MessageUtil.js";
 
 export function createWebSocketService({ server, fileWatcher, publicUrl = '' }) {
   const wsPath = publicUrl ? `${publicUrl}/ws` : '/ws';
+
+  console.log(`[WS] Initializing WebSocket server on path: ${wsPath}`);
+
   const wss = new WebSocketServer({
     server,
     path: wsPath,
+    // Don't verify origin in production (reverse proxy handles this)
     // Verify client connection
     verifyClient: (info, callback) => {
       // Log the upgrade request
       console.log(`[WS] WebSocket upgrade request from: ${info.req.socket.remoteAddress}`);
       console.log(`[WS] Request path: ${info.req.url}`);
       console.log(`[WS] Request headers:`, {
+        'host': info.req.headers['host'],
+        'origin': info.req.headers['origin'],
         'sec-websocket-key': info.req.headers['sec-websocket-key'],
         'sec-websocket-version': info.req.headers['sec-websocket-version'],
         'upgrade': info.req.headers['upgrade'],
-        'connection': info.req.headers['connection']
+        'connection': info.req.headers['connection'],
+        'x-forwarded-for': info.req.headers['x-forwarded-for'],
+        'x-forwarded-proto': info.req.headers['x-forwarded-proto']
       });
 
       // Check if required headers are present
@@ -26,8 +34,19 @@ export function createWebSocketService({ server, fileWatcher, publicUrl = '' }) 
       }
 
       // Accept the connection
+      console.log('[WS] Accepting WebSocket connection');
       callback(true);
     }
+  });
+
+  // Log server creation
+  wss.on('listening', () => {
+    console.log(`[WS] WebSocket server is now listening on path: ${wsPath}`);
+  });
+
+  // Log server errors
+  wss.on('error', (error) => {
+    console.error('[WS] WebSocket server error:', error);
   });
 
   logD(`[WS] WebSocket server listening on path: ${wsPath}`);

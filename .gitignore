@@ -14,3 +14,6 @@ apps/api/report.json
 apps/api/.codex/environments/environment.toml
 apps/web/.codex/environments/environment.toml
 .idea/
+k8s*
+nextcloud_mysql_backup_database.sql
+docs/nextcloud-shares-usage.md

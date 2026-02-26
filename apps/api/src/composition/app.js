@@ -12,6 +12,7 @@ import { createTokenService } from "../auth/tokenService";
 import { createProgressRouter } from "../routers/ProgressRouter";
 import { createMediaServices } from "./mediaServices";
 import { createCorsOptions } from "./corsOptions";
+import { getRedisClient } from "../auth/redisSessionStore.js";
 
 export function createApp({ appConfig, env = process.env, sessionMiddleware = null } = {}) {
   const app = express();
@@ -19,12 +20,40 @@ export function createApp({ appConfig, env = process.env, sessionMiddleware = nu
   const publicUrl = (appConfig.publicUrl || '').replace(/\/$/, ''); // Remove trailing slash
 
   app.use(cors(corsOptions));
-  app.use(bodyParser.json());
-  app.use(bodyParser.urlencoded({ extended: true }));
+
+  // Skip body parsing and session for WebSocket upgrade requests
+  const wsPath = publicUrl ? `${publicUrl}/ws` : '/ws';
+
+  app.use((req, res, next) => {
+    // Check if this is a WebSocket upgrade request
+    const isWebSocket = req.headers.upgrade?.toLowerCase() === 'websocket';
+    const isWsPath = req.path === wsPath || req.path.startsWith(`${wsPath}/`);
+
+    if (isWebSocket && isWsPath) {
+      console.log(`[MIDDLEWARE] Skipping body-parser and session for WebSocket: ${req.path}`);
+      return next();
+    }
+
+    // Apply body parser for non-WebSocket requests
+    bodyParser.json()(req, res, (err) => {
+      if (err) return next(err);
+      bodyParser.urlencoded({ extended: true })(req, res, next);
+    });
+  });
 
   // Session middleware (for Redis/Spring Session SSO) - passed from startup
+  // Skip for WebSocket requests
   if (sessionMiddleware) {
-    app.use(sessionMiddleware);
+    app.use((req, res, next) => {
+      const isWebSocket = req.headers.upgrade?.toLowerCase() === 'websocket';
+      const isWsPath = req.path === wsPath || req.path.startsWith(`${wsPath}/`);
+
+      if (isWebSocket && isWsPath) {
+        return next();
+      }
+
+      sessionMiddleware(req, res, next);
+    });
   }
 
   // Serve public static files
@@ -50,6 +79,17 @@ export function createApp({ appConfig, env = process.env, sessionMiddleware = nu
   app.get("/health", (_req, res) => {
     res.status(200).json({ status: "ok" }).end();
   });
+
+  // Debug endpoint to verify WebSocket configuration
+  app.get(`${publicUrl}/debug/config`, (_req, res) => {
+    res.status(200).json({
+      publicUrl: publicUrl,
+      expectedWsPath: publicUrl ? `${publicUrl}/ws` : '/ws',
+      nodeEnv: env.NODE_ENV,
+      serverUrl: `${env.SERVER_PROTOCOL || 'http'}://${env.SERVER_HOST || 'localhost'}:${env.SERVER_PORT || 3005}`
+    }).end();
+  });
+
   app.get("/favicon.ico", (_req, res) => {
     res.status(204).end();
   });
@@ -64,7 +104,8 @@ export function createApp({ appConfig, env = process.env, sessionMiddleware = nu
   const refreshTokenStore = createInMemoryRefreshTokenStore();
   const tokenService = createTokenService();
   const { fileService, streamService } = createMediaServices();
-  const requireAuth = createRequireAuth({ tokenService });
+  const redisClient = getRedisClient();
+  const requireAuth = createRequireAuth({ tokenService, redisClient });
 
   // Mount auth routes (no auth required except for /me)
   app.use(

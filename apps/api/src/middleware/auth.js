@@ -1,14 +1,63 @@
 import * as defaultTokenService from "../auth/tokenService";
 import { getCookie } from "../common/Util";
-import { getUser } from "../user/userStore.js";
+import { getUser, upsertUser } from "../user/userStore.js";
+import { checkNextcloudRedisSession } from "../auth/nextcloudAuthService.js";
+import { ensureUserDirectory } from "../user/userDirectory.js";
 
 const COOKIE_ACCESS = "access_token";
 
 export function createRequireAuth({
   tokenService = defaultTokenService,
+  redisClient = null,
 } = {}) {
   return async function requireAuth(req, res, next) {
     console.log(`[AUTH] ${req.method} ${req.path} - Checking authentication`);
+
+    // Check Nextcloud Redis session if enabled (automatic SSO)
+    const nextcloudAuthEnabled = process.env.NEXTCLOUD_AUTH_ENABLED === 'true';
+    const ssoRedisEnabled = process.env.SSO_REDIS_ENABLED === 'true';
+
+    if (nextcloudAuthEnabled && ssoRedisEnabled && redisClient && req.sessionID) {
+      console.log(`[AUTH] Checking Nextcloud Redis session for sessionID: ${req.sessionID}`);
+
+      const nextcloudSessionPrefix = process.env.NEXTCLOUD_SESSION_PREFIX || 'nc_session:';
+      console.log(`[AUTH] About to call checkNextcloudRedisSession...`);
+      const nextcloudSession = await checkNextcloudRedisSession({
+        redisClient,
+        sessionId: req.sessionID,
+        nextcloudSessionPrefix
+      });
+      console.log(`[AUTH] checkNextcloudRedisSession returned:`, nextcloudSession);
+
+      if (nextcloudSession.authenticated && nextcloudSession.username) {
+        console.log(`[AUTH] Authenticated via Nextcloud Redis session: ${nextcloudSession.username}`);
+
+        // Register user and create directories if needed
+        const appUser = upsertUser(nextcloudSession.username);
+        ensureUserDirectory(nextcloudSession.username);
+
+        // Set up session
+        if (req.session) {
+          req.session.authenticated = true;
+          req.session.user = {
+            id: appUser.id,
+            username: nextcloudSession.username,
+            email: nextcloudSession.username,
+            authorities: ["ROLE_USER"],
+            videoPath: appUser.videoPath,
+          };
+          req.user = req.session.user;
+        } else {
+          req.user = {
+            id: appUser.id,
+            username: nextcloudSession.username,
+            videoPath: appUser.videoPath,
+          };
+        }
+
+        return next();
+      }
+    }
 
     // Check session first (SSO via Redis or memory)
     if (req.session && req.session.authenticated && req.session.user) {
