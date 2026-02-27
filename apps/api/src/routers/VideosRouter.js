@@ -53,6 +53,7 @@ export function createVideosRouter({
   router.get("/videos", loadMovies);
   router.get("/videos/:id", loadMovie);
   router.get("/videos/:folder/:fileName", streamingVideo);
+  router.get("/videos/nextcloud/:fileId/stream", streamNextcloudVideo);
 
   router.get("/series", loadSeries);
   router.get("/series/:id", loadShow);
@@ -128,6 +129,22 @@ export function createVideosRouter({
         statusCode: 501,
       });
     };
+
+    // Handle Nextcloud videos (ID format: nextcloud-{fileId})
+    if (id && id.startsWith('nextcloud-')) {
+      console.log(`[VIDEO] Nextcloud video requested: ${id}`);
+      // For now, return a placeholder response indicating Nextcloud video
+      // The actual streaming will be handled by the frontend or a separate route
+      const fileId = id.replace('nextcloud-', '');
+      flushJSON(response, {
+        id: id,
+        fileId: fileId,
+        isNextcloudShare: true,
+        // Frontend should handle streaming via Nextcloud API
+        message: "Nextcloud video - streaming handled by frontend"
+      });
+      return;
+    }
 
     if (movieMap.allIds.length === 0) {
       try {
@@ -272,6 +289,76 @@ export function createVideosRouter({
         response,
         message:
           "Something went wrong, file not found, maybe folder has a different name",
+        statusCode: 500,
+        error,
+      });
+    }
+  }
+
+  async function streamNextcloudVideo(req, response) {
+    const { fileId } = req.params;
+    console.log(`[NEXTCLOUD_STREAM] Streaming file ID: ${fileId}`);
+
+    try {
+      // Get Nextcloud credentials from request body or query
+      const username = req.query.username || req.body?.username;
+      const appPassword = req.query.appPassword || req.body?.appPassword;
+      const filePath = req.query.filePath || req.body?.filePath;
+
+      if (!username || !appPassword || !filePath) {
+        return sendError({
+          response,
+          message: "Missing Nextcloud credentials or file path",
+          statusCode: 400,
+        });
+      }
+
+      const nextcloudUrl = process.env.NEXTCLOUD_URL || 'https://spendingbetter.com/nextcloud';
+      const encodedPath = filePath.split('/').map(encodeURIComponent).join('/');
+      const webdavUrl = `${nextcloudUrl}/remote.php/dav/files/${username}${encodedPath}`;
+
+      console.log(`[NEXTCLOUD_STREAM] Fetching from: ${webdavUrl}`);
+
+      // Create Basic Auth header
+      const auth = Buffer.from(`${username}:${appPassword}`).toString('base64');
+
+      // Forward range header if present
+      const headers = {
+        'Authorization': `Basic ${auth}`,
+      };
+      if (req.headers.range) {
+        headers['Range'] = req.headers.range;
+      }
+
+      // Fetch from Nextcloud
+      const fetch = (await import('node-fetch')).default;
+      const ncResponse = await fetch(webdavUrl, { headers });
+
+      if (!ncResponse.ok) {
+        console.error(`[NEXTCLOUD_STREAM] Nextcloud returned ${ncResponse.status}`);
+        return sendError({
+          response,
+          message: "Failed to fetch video from Nextcloud",
+          statusCode: ncResponse.status,
+        });
+      }
+
+      // Forward headers
+      response.status(ncResponse.status);
+      response.set('Content-Type', ncResponse.headers.get('content-type'));
+      response.set('Content-Length', ncResponse.headers.get('content-length'));
+      response.set('Accept-Ranges', ncResponse.headers.get('accept-ranges') || 'bytes');
+      if (ncResponse.headers.get('content-range')) {
+        response.set('Content-Range', ncResponse.headers.get('content-range'));
+      }
+
+      // Pipe the response
+      ncResponse.body.pipe(response);
+    } catch (error) {
+      console.error(`[NEXTCLOUD_STREAM] Error:`, error);
+      sendError({
+        response,
+        message: "Error streaming Nextcloud video",
         statusCode: 500,
         error,
       });

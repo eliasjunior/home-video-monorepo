@@ -77,25 +77,57 @@ function Player({ match, dispatch }) {
 
     (async () => {
       try {
-        videoUrl = await getBlobUrl(
-          getVideoPath({ mediaType: params.type, media })
-        );
-        const trackPath = getTrackPath({ mediaType: params.type, media });
-        if (trackPath) {
-          trackUrl = await getBlobUrl(trackPath);
-        }
-        if (active) {
-          setVideoSrc(videoUrl);
-          setTrackSrc(trackUrl || "");
+        // Handle Nextcloud videos differently
+        if (media.isNextcloudShare && media.nextcloudData) {
+          console.log('[Player] Loading Nextcloud video:', media.nextcloudData);
+          // Get Nextcloud credentials from sessionStorage
+          const username = sessionStorage.getItem('nextcloud_username');
+          const appPassword = sessionStorage.getItem('nextcloud_app_password');
+
+          if (!username || !appPassword) {
+            dispatch({ type: HAS_ERROR, payload: "Nextcloud credentials not found" });
+            return;
+          }
+
+          // Use backend proxy endpoint for Nextcloud video streaming
+          const filePath = media.nextcloudData.path || media.nextcloudData.fileName;
+          const fileId = media.nextcloudData.fileId || media.fileId;
+
+          // Construct proxy URL with credentials as query params
+          const streamUrl = `${SERVER_URL}/videos/nextcloud/${fileId}/stream?username=${encodeURIComponent(username)}&appPassword=${encodeURIComponent(appPassword)}&filePath=${encodeURIComponent(filePath)}`;
+
+          console.log('[Player] Nextcloud proxy stream URL:', streamUrl);
+
+          if (active) {
+            setVideoSrc(streamUrl);
+            setTrackSrc("");
+          }
+        } else {
+          // Handle local videos (existing logic)
+          videoUrl = await getBlobUrl(
+            getVideoPath({ mediaType: params.type, media })
+          );
+          const trackPath = getTrackPath({ mediaType: params.type, media });
+          if (trackPath) {
+            trackUrl = await getBlobUrl(trackPath);
+          }
+          if (active) {
+            setVideoSrc(videoUrl);
+            setTrackSrc(trackUrl || "");
+          }
         }
       } catch (err) {
+        console.error('[Player] Error loading media:', err);
         dispatch({ type: HAS_ERROR, payload: "Error loading media" });
       }
     })();
 
     return () => {
       active = false;
-      if (videoUrl) URL.revokeObjectURL(videoUrl);
+      if (videoUrl && !media.isNextcloudShare) {
+        // Only revoke blob URLs for local videos
+        URL.revokeObjectURL(videoUrl);
+      }
       if (trackUrl) URL.revokeObjectURL(trackUrl);
     };
   }, [media, params.type, dispatch]);
