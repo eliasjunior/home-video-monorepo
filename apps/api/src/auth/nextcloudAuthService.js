@@ -22,15 +22,28 @@ export async function authenticateWithNextcloud({ username, appPassword, nextclo
     // Remove trailing slash from URL
     const baseUrl = nextcloudUrl.replace(/\/$/, '');
 
+    // URL-encode the username for use in the path (important for emails with @)
+    const encodedUsername = encodeURIComponent(username);
+
     // Test authentication using Nextcloud's WebDAV endpoint
     // This is the most reliable way to verify credentials
-    const webdavUrl = `${baseUrl}/remote.php/dav/files/${username}/`;
+    const webdavUrl = `${baseUrl}/remote.php/dav/files/${encodedUsername}/`;
 
-    logD(`[NEXTCLOUD_AUTH] Attempting to authenticate user: ${username}`);
-    logD(`[NEXTCLOUD_AUTH] WebDAV URL: ${webdavUrl}`);
+    console.log(`[NEXTCLOUD_AUTH] Attempting to authenticate user: ${username}`);
+    console.log(`[NEXTCLOUD_AUTH] WebDAV URL: ${webdavUrl}`);
+    console.log(`[NEXTCLOUD_AUTH] App password length: ${appPassword?.length || 0} characters`);
+
+    if (!appPassword || appPassword.length < 20) {
+      console.error(`[NEXTCLOUD_AUTH] App password seems invalid (too short: ${appPassword?.length || 0} chars)`);
+      return {
+        success: false,
+        error: "App password is invalid or too short. Nextcloud app passwords are typically 72+ characters. Please generate a proper app password from Nextcloud settings."
+      };
+    }
 
     // Create Basic Auth header
     const auth = Buffer.from(`${username}:${appPassword}`).toString('base64');
+    console.log(`[NEXTCLOUD_AUTH] Basic auth header created`);
 
     const response = await fetch(webdavUrl, {
       method: 'PROPFIND',
@@ -41,24 +54,28 @@ export async function authenticateWithNextcloud({ username, appPassword, nextclo
       }
     });
 
+    console.log(`[NEXTCLOUD_AUTH] Response status: ${response.status} ${response.statusText}`);
+
     if (response.status === 207 || response.status === 200) {
       // Multi-Status or OK response means authentication succeeded
-      logD(`[NEXTCLOUD_AUTH] Authentication successful for user: ${username}`);
+      console.log(`[NEXTCLOUD_AUTH] Authentication successful for user: ${username}`);
       return {
         success: true,
         username: username
       };
     } else if (response.status === 401) {
-      logD(`[NEXTCLOUD_AUTH] Authentication failed: Invalid credentials`);
+      console.log(`[NEXTCLOUD_AUTH] Authentication failed: Invalid credentials`);
       return {
         success: false,
         error: "Invalid Nextcloud username or app password"
       };
     } else {
-      logD(`[NEXTCLOUD_AUTH] Authentication failed with status: ${response.status}`);
+      const responseText = await response.text().catch(() => '');
+      console.error(`[NEXTCLOUD_AUTH] Authentication failed with status: ${response.status} ${response.statusText}`);
+      console.error(`[NEXTCLOUD_AUTH] Response body: ${responseText.substring(0, 500)}`);
       return {
         success: false,
-        error: `Authentication failed: ${response.statusText}`
+        error: `Authentication failed: ${response.statusText || response.status}`
       };
     }
   } catch (error) {

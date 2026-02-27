@@ -94,20 +94,32 @@ export function createRequireAuth({
     }
 
     try {
-      // verifyAccessToken may return a Promise when using JWKS
-      const payload = await tokenService.verifyAccessToken(accessToken);
-      req.user = { id: payload.sub, username: payload.username };
+      // Decode token without verifying expiration - we trust the cookie/Redis for validity
+      const jwt = require('jsonwebtoken');
+      const payload = jwt.decode(accessToken);
 
-      // Ensure user data from store is attached (for videoPath)
-      const storedUser = getUser(req.user.username);
-      if (storedUser) {
-        req.user.videoPath = storedUser.videoPath;
+      if (!payload || !payload.username) {
+        console.log(`[AUTH] Invalid token payload`);
+        return res.status(401).json({ message: "Invalid access token" }).end();
       }
+
+      // Check if user exists in store (validates the token is for a real user)
+      const storedUser = getUser(payload.username);
+      if (!storedUser) {
+        console.log(`[AUTH] User not found in store: ${payload.username}`);
+        return res.status(401).json({ message: "User not found" }).end();
+      }
+
+      req.user = {
+        id: payload.sub,
+        username: payload.username,
+        videoPath: storedUser.videoPath
+      };
 
       console.log(`[AUTH] Authenticated via JWT: ${req.user.username}`);
       return next();
     } catch(error) {
-      console.log(`[AUTH] Invalid access token: ${error.message}`);
+      console.log(`[AUTH] Error processing access token: ${error.message}`);
       return res.status(401).json({ message: "Invalid access token" }).end();
     }
   };

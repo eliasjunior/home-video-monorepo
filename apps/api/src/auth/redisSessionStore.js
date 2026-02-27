@@ -122,10 +122,11 @@ export async function createSessionMiddleware() {
       let springSessionId = null;
 
       if (cookies) {
-        // Try multiple cookie name patterns: SESSION, SESSIONID, or the configured name
+        // Try multiple cookie name patterns: SESSION, SESSIONID, nc_session_id (Nextcloud), or the configured name
         // Use word boundaries (\b) to match exact cookie names only
         const cookiePatterns = [
           new RegExp(`\\b${sessionCookieName}=([^;]+)`),
+          /\bnc_session_id=([^;]+)/,        // Nextcloud session cookie
           /\bSESSIONID=([^;]+)/,
           /\bSESSION=([^;]+)/
         ];

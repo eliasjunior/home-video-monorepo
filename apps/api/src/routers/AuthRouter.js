@@ -173,7 +173,33 @@ export function createAuthRouter({
       };
     }
 
-    return res.status(200).json({ accessToken: loginSession.accessToken }).end();
+    // Try to authenticate with Nextcloud using the same credentials
+    let nextcloudAvailable = false;
+    const nextcloudAuthEnabled = process.env.NEXTCLOUD_AUTH_ENABLED === 'true';
+    const nextcloudUrl = process.env.NEXTCLOUD_URL;
+
+    if (nextcloudAuthEnabled && nextcloudUrl) {
+      console.log(`[LOGIN] Checking Nextcloud access for user: ${username}`);
+      const { authenticateWithNextcloud } = await import('../auth/nextcloudAuthService.js');
+      const authResult = await authenticateWithNextcloud({
+        username,
+        appPassword: password,
+        nextcloudUrl
+      });
+
+      if (authResult.success) {
+        console.log(`[LOGIN] User has Nextcloud access`);
+        nextcloudAvailable = true;
+      } else {
+        console.log(`[LOGIN] User does not have Nextcloud access: ${authResult.error}`);
+      }
+    }
+
+    return res.status(200).json({
+      accessToken: loginSession.accessToken,
+      nextcloudAvailable,
+      nextcloudCredentials: nextcloudAvailable ? { username, password } : null
+    }).end();
   }
 
   function refresh(req, res) {
@@ -282,8 +308,8 @@ export function createAuthRouter({
           console.log(`[LOGOUT] Session destroyed from ${ssoRedisEnabled ? 'Redis' : 'memory store'}`);
         }
 
-        // Clear all possible session cookies (Spring Session uses various names)
-        const cookiesToClear = [sessionCookieName, 'SESSIONID', 'SESSION', 'JSESSIONID', 'connect.sid'];
+        // Clear all possible session cookies (Spring Session and Nextcloud use various names)
+        const cookiesToClear = [sessionCookieName, 'SESSIONID', 'SESSION', 'JSESSIONID', 'nc_session_id', 'connect.sid'];
         cookiesToClear.forEach(cookieName => {
           res.clearCookie(cookieName, {
             path: '/',

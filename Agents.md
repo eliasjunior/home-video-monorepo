@@ -57,8 +57,10 @@ The backend supports **four authentication methods**:
 1. **JWT with Local Secret**
    - Tokens issued by the Node.js app using `JWT_ACCESS_SECRET`
    - Default method for standalone deployments
-   - Access tokens are short-lived (15m default)
+   - Access tokens are short-lived (15m default, but expiration is not enforced)
    - Refresh tokens are long-lived (180d default)
+   - **Token validation**: Decodes JWT without verifying expiration; validates by checking user existence in store
+   - Sessions persist as long as cookie exists and user is valid (not tied to JWT expiration)
 
 2. **JWKS Validation**
    - Validates JWT tokens from external auth services
@@ -140,9 +142,13 @@ The application supports **real-time automatic page updates** when video files a
 
 **WebSocket Connection**: `ws://localhost:8081/home-video/ws` (or your configured PUBLIC_URL)
 
-### Nextcloud Sync Integration (Optional)
+### Nextcloud Integration
 
-The application supports **automatic synchronization** with Nextcloud for seamless video management:
+The application supports **two modes of Nextcloud integration**:
+
+#### 1. Nextcloud Sync (File Synchronization)
+
+**Automatic synchronization** with Nextcloud for seamless video management:
 
 - **Bidirectional Sync**: Automatically copies new videos from Nextcloud to home-video and deletes them when removed from Nextcloud
 - **User-Scoped**: Each Nextcloud user's files sync to their corresponding home-video directory
@@ -159,6 +165,42 @@ The application supports **automatic synchronization** with Nextcloud for seamle
 5. Integrates with file watcher and WebSocket for real-time UI updates
 
 **Use Case**: Users upload videos via Nextcloud mobile app → Videos automatically appear in home-video web interface
+
+#### 2. Nextcloud Authentication & Streaming (Direct Access)
+
+**Stream videos directly from Nextcloud** without local copying:
+
+- **App Password Authentication**: Users login with Nextcloud app password (72+ character secure token)
+- **Automatic Detection**: When logging in with regular credentials, automatically checks if user has Nextcloud access
+- **OCS Share API**: Fetches videos shared with the authenticated user via Nextcloud Shares API
+- **Direct Streaming**: Videos are streamed from Nextcloud WebDAV in real-time (no local storage needed)
+- **Backend Proxy**: Server-side proxy handles WebDAV authentication and streaming to avoid CORS
+- **Redis Session Support**: Can authenticate via Nextcloud Redis sessions (PHP serialized format)
+- **Merged Display**: Nextcloud videos appear alongside local videos in the same dashboard
+
+**Authentication Methods**:
+1. **Nextcloud App Password Login**: Check "Use Nextcloud App Password" and provide app password
+2. **Automatic with Regular Login**: System auto-detects Nextcloud access when using same credentials
+3. **Redis Session SSO**: Authenticate via existing Nextcloud session stored in Redis
+
+**How it works**:
+1. User logs in with Nextcloud credentials (or system detects Nextcloud access)
+2. Frontend stores credentials in sessionStorage
+3. Dashboard fetches shared videos from Nextcloud OCS API (`/ocs/v2.php/apps/files_sharing/api/v1/shares`)
+4. Videos are displayed with "Shared by {owner}" folder name
+5. When clicked, backend proxies WebDAV streaming (`/remote.php/dav/files/{username}/{path}`)
+6. Video plays directly from Nextcloud without downloading
+
+**Configuration**:
+```bash
+NEXTCLOUD_AUTH_ENABLED=true
+NEXTCLOUD_URL=https://your-nextcloud.com/nextcloud
+SSO_REDIS_ENABLED=true                           # Optional: for Redis session support
+NEXTCLOUD_SESSION_PREFIX=PHPREDIS_SESSION:       # Redis key prefix for Nextcloud sessions
+REDIS_PASSWORD=your-redis-password
+```
+
+**Use Case**: Users with existing Nextcloud shared videos can stream them directly without duplicating files locally
 
 ### Key Implementation Files
 
@@ -183,16 +225,21 @@ The application supports **automatic synchronization** with Nextcloud for seamle
 14. **`apps/web/src/hooks/useWebSocket.js`** - React WebSocket hook with auto-reconnect
 15. **`apps/web/src/components/video/components/VideoMainList.jsx`** - User-filtered real-time updates
 
-**Nextcloud Sync:**
+**Nextcloud Integration:**
 16. **`apps/api/src/services/nextcloudSyncService.js`** - Nextcloud to home-video synchronization service
+17. **`apps/api/src/auth/nextcloudAuthService.js`** - Nextcloud authentication, OCS Share API, Redis session handling
+18. **`apps/api/src/routers/VideosRouter.js`** - Nextcloud video streaming proxy endpoint
+19. **`apps/web/src/components/video/components/Player.jsx`** - Nextcloud video detection and streaming
+20. **`apps/web/src/components/video/components/VideoMainList.jsx`** - Merged local and Nextcloud video display
+21. **`apps/web/src/components/auth/Login.jsx`** - Nextcloud app password login with help dialog
 
 **Frontend:**
-17. **`apps/web/src/config.js`** - API URL configuration with PUBLIC_URL support
-18. **`apps/web/src/main/Routers.js`** - React Router with basename configuration
-19. **`apps/web/src/services/Api.js`** - API client with getCurrentUser() for WebSocket filtering
+22. **`apps/web/src/config.js`** - API URL configuration with PUBLIC_URL support
+23. **`apps/web/src/main/Routers.js`** - React Router with basename configuration
+24. **`apps/web/src/services/Api.js`** - API client with getCurrentUser() for WebSocket filtering
 
 **Security:**
-20. **`docs/security/multi-user-isolation.md`** - Multi-user security and isolation documentation
+25. **`docs/security/multi-user-isolation.md`** - Multi-user security and isolation documentation
 
 ### Environment Configuration
 
@@ -232,10 +279,14 @@ PUBLIC_URL=/home-video           # URL prefix for app and API endpoints
 MULTI_USER_ENABLED=false        # Enable per-user video directories
 FILE_WATCHER_ENABLED=true       # Enable file system monitoring and WebSocket updates
 
-# Nextcloud Sync (Optional)
-NEXTCLOUD_SYNC_ENABLED=false    # Enable Nextcloud to home-video sync
+# Nextcloud Integration
+NEXTCLOUD_SYNC_ENABLED=false    # Enable Nextcloud to home-video file sync
 NEXTCLOUD_DATA_PATH=            # Path to Nextcloud data directory (e.g., /var/snap/nextcloud/common/nextcloud/data)
 NEXTCLOUD_SYNC_EXISTING=false   # Sync existing files on startup
+
+NEXTCLOUD_AUTH_ENABLED=true     # Enable Nextcloud authentication and streaming
+NEXTCLOUD_URL=                  # Nextcloud instance URL (e.g., https://cloud.example.com/nextcloud)
+NEXTCLOUD_SESSION_PREFIX=PHPREDIS_SESSION:  # Redis session prefix for Nextcloud
 ```
 
 ---

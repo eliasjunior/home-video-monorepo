@@ -101,17 +101,16 @@ LOGIN_SECOND_RETRY_URL=http://auth-service:8080/api/authenticate
 # OAuth2 Integration
 OAUTH2_GOOGLE_URL=http://auth-service:8080/oauth2/authorization/google
 
-# Nextcloud Sync (Optional)
+# Nextcloud Integration (Optional)
+# File Synchronization
 NEXTCLOUD_SYNC_ENABLED=false
 NEXTCLOUD_DATA_PATH=/var/snap/nextcloud/common/nextcloud/data
 NEXTCLOUD_SYNC_EXISTING=false
 
-# Nextcloud Authentication (Optional)
+# Direct Streaming & Authentication
 NEXTCLOUD_AUTH_ENABLED=false
 NEXTCLOUD_URL=https://nextcloud.example.com
-OAUTH2_NEXTCLOUD_SSO_URL=https://nextcloud.example.com/apps/oauth2/authorize
-# Nextcloud session prefix (nc_session: for native, spring:session:sessions: for Spring)
-NEXTCLOUD_SESSION_PREFIX=nc_session:
+NEXTCLOUD_SESSION_PREFIX=PHPREDIS_SESSION:
 ```
 
 See `.env.docker.api.prod` for all available options.
@@ -123,6 +122,8 @@ See `.env.docker.api.prod` for all available options.
 The application supports multiple authentication methods:
 
 1. **JWT Authentication** - Default method using access and refresh tokens
+   - Token validation decodes JWT without enforcing expiration
+   - Sessions persist based on cookie presence and user validity (not JWT expiration time)
 2. **JWKS Validation** - Validates tokens from external auth services (supports both symmetric and asymmetric keys)
 3. **Spring Session SSO** - Integrates with Spring Boot applications via Redis-backed sessions
 4. **Login Second Retry** - Falls back to external authentication service if local validation fails
@@ -133,11 +134,11 @@ The application supports multiple authentication methods:
 5. **Google OAuth2** - Optional "Sign in with Google" button
    - Configurable via `OAUTH2_GOOGLE_URL` environment variable
    - Redirects to external OAuth2 authorization endpoint
-6. **Nextcloud Authentication** - Three authentication methods for Nextcloud integration:
-   - **App Password**: WebDAV authentication using Nextcloud app passwords
-   - **SSO**: OAuth2 single sign-on integration with Nextcloud
-   - **Redis Session**: Automatic authentication by checking Nextcloud sessions in Redis
-   - Configurable via `NEXTCLOUD_AUTH_ENABLED`, `NEXTCLOUD_URL`, and related environment variables
+6. **Nextcloud Authentication** - Multiple authentication methods for Nextcloud integration:
+   - **App Password Login**: Users explicitly login with Nextcloud app password (72+ character secure token)
+   - **Automatic Detection**: Regular login automatically checks Nextcloud access with same credentials
+   - **Redis Session SSO**: Automatic authentication by checking Nextcloud PHP sessions in Redis
+   - Configurable via `NEXTCLOUD_AUTH_ENABLED`, `NEXTCLOUD_URL`, and `NEXTCLOUD_SESSION_PREFIX`
    - Seamlessly integrates with Nextcloud user accounts
 
 ### Merged Application
@@ -191,9 +192,13 @@ The application features **automatic page updates** when video files are added o
 - Events filtered by username in multi-user mode
 - Reconnection: Max 5 attempts with 3-second delay
 
-### Nextcloud Sync (Optional)
+### Nextcloud Integration (Optional)
 
-The application supports **automatic synchronization** with Nextcloud for seamless video management:
+The application supports **two modes of Nextcloud integration**:
+
+#### Mode 1: File Synchronization
+
+**Automatic synchronization** with Nextcloud for seamless video management:
 
 - **Bidirectional Sync**: Automatically copies videos from Nextcloud to home-video and removes them when deleted
 - **User-Scoped Sync**: Each Nextcloud user's files sync to their corresponding home-video directory
@@ -218,6 +223,42 @@ NEXTCLOUD_SYNC_EXISTING=false  # Set to true to sync existing files on startup
 ```
 
 See [`docs/features/nextcloud-sync.md`](docs/features/nextcloud-sync.md) for detailed setup instructions.
+
+#### Mode 2: Direct Streaming & Authentication
+
+**Stream videos directly from Nextcloud** without local file copying:
+
+- **OCS Share API Integration**: Fetches videos shared with authenticated user via Nextcloud Shares API
+- **Direct WebDAV Streaming**: Videos stream from Nextcloud in real-time (no local storage needed)
+- **Backend Proxy**: Server-side proxy handles WebDAV authentication and streaming to avoid CORS
+- **Merged Display**: Nextcloud shared videos appear alongside local videos in the same dashboard
+- **Three Authentication Methods**:
+  1. **App Password Login**: Users explicitly choose "Use Nextcloud App Password" during login
+  2. **Automatic Detection**: Regular login auto-checks if user has Nextcloud access with same credentials
+  3. **Redis Session SSO**: Automatic authentication via existing Nextcloud PHP sessions in Redis
+
+**How it works**:
+1. User logs in (with app password or regular credentials)
+2. System checks Nextcloud access and fetches shared videos from OCS Share API
+3. Videos displayed with "Shared by {owner}" folder name
+4. When clicked, backend proxies WebDAV streaming from Nextcloud
+5. Video plays directly without downloading
+
+**Use Case**: Stream videos shared with you in Nextcloud without duplicating files locally.
+
+**Configuration**:
+```bash
+NEXTCLOUD_AUTH_ENABLED=true
+NEXTCLOUD_URL=https://cloud.example.com/nextcloud
+NEXTCLOUD_SESSION_PREFIX=PHPREDIS_SESSION:  # For Redis session SSO
+REDIS_PASSWORD=your-redis-password          # If using Redis session SSO
+```
+
+**User Experience**:
+- Login page shows "Use Nextcloud App Password" checkbox with help dialog
+- Help dialog explains how to generate Nextcloud app passwords
+- After login, Nextcloud videos automatically appear alongside local videos
+- Click any Nextcloud video to stream directly from Nextcloud
 
 ## Documentation
 

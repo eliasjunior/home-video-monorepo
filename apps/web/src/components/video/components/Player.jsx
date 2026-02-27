@@ -57,6 +57,39 @@ function Player({ match, dispatch }) {
     let active = true;
     const fetchMovie = async () => {
       try {
+        // Check if this is a Nextcloud video by looking at the ID
+        if (params.id && params.id.startsWith('nextcloud-')) {
+          console.log('[Player] Detected Nextcloud video ID:', params.id);
+          // Load from sessionStorage instead of backend
+          const nextcloudVideosJson = sessionStorage.getItem('nextcloud_videos');
+          if (nextcloudVideosJson) {
+            const nextcloudVideos = JSON.parse(nextcloudVideosJson);
+            const fileId = params.id.replace('nextcloud-', '');
+            const ncVideo = nextcloudVideos.find(v => String(v.fileId) === String(fileId));
+
+            if (ncVideo) {
+              // Reconstruct the media object with Nextcloud data
+              const videoId = `nextcloud-${ncVideo.fileId}`;
+              const mediaObj = {
+                id: videoId,
+                title: ncVideo.fileName.replace(/^\//, ''),
+                folder: `Shared by ${ncVideo.ownerDisplayName}`,
+                name: ncVideo.fileName.split('/').pop(),
+                isNextcloudShare: true,
+                fileId: ncVideo.fileId,
+                nextcloudData: ncVideo
+              };
+              console.log('[Player] Loaded Nextcloud video from sessionStorage:', mediaObj);
+              if (active) setMedia(mediaObj);
+              return;
+            }
+          }
+          console.error('[Player] Nextcloud video not found in sessionStorage');
+          dispatch({ type: HAS_ERROR, payload: "Nextcloud video not found" });
+          return;
+        }
+
+        // Load regular video from backend
         const resp = await loadVideo(params.id, params.type === SERIES_CATEG);
         if (active) setMedia(resp);
       } catch (error) {
@@ -77,9 +110,12 @@ function Player({ match, dispatch }) {
 
     (async () => {
       try {
+        console.log('[Player] Loading media:', media);
+        console.log('[Player] media.isNextcloudShare:', media.isNextcloudShare);
+
         // Handle Nextcloud videos differently
-        if (media.isNextcloudShare && media.nextcloudData) {
-          console.log('[Player] Loading Nextcloud video:', media.nextcloudData);
+        if (media.isNextcloudShare) {
+          console.log('[Player] Loading Nextcloud video:', media);
           // Get Nextcloud credentials from sessionStorage
           const username = sessionStorage.getItem('nextcloud_username');
           const appPassword = sessionStorage.getItem('nextcloud_app_password');
@@ -89,9 +125,37 @@ function Player({ match, dispatch }) {
             return;
           }
 
-          // Use backend proxy endpoint for Nextcloud video streaming
-          const filePath = media.nextcloudData.path || media.nextcloudData.fileName;
-          const fileId = media.nextcloudData.fileId || media.fileId;
+          // Get stored Nextcloud videos data
+          const nextcloudVideosJson = sessionStorage.getItem('nextcloud_videos');
+          let nextcloudVideos = [];
+          if (nextcloudVideosJson) {
+            try {
+              nextcloudVideos = JSON.parse(nextcloudVideosJson);
+            } catch (e) {
+              console.error('[Player] Error parsing Nextcloud videos:', e);
+            }
+          }
+
+          // Find the video data by fileId
+          const fileId = media.fileId || (media.id && media.id.replace('nextcloud-', ''));
+          const videoData = nextcloudVideos.find(v => String(v.fileId) === String(fileId));
+
+          if (!videoData) {
+            console.error('[Player] Nextcloud video data not found for fileId:', fileId);
+            dispatch({ type: HAS_ERROR, payload: "Nextcloud video data not found" });
+            return;
+          }
+
+          console.log('[Player] Found Nextcloud video data:', videoData);
+
+          // Use fileName as it contains the WebDAV file path (file_target from Nextcloud API)
+          const filePath = videoData.fileName;
+
+          if (!filePath) {
+            console.error('[Player] No file path found in video data');
+            dispatch({ type: HAS_ERROR, payload: "Nextcloud video path not found" });
+            return;
+          }
 
           // Construct proxy URL with credentials as query params
           const streamUrl = `${SERVER_URL}/videos/nextcloud/${fileId}/stream?username=${encodeURIComponent(username)}&appPassword=${encodeURIComponent(appPassword)}&filePath=${encodeURIComponent(filePath)}`;

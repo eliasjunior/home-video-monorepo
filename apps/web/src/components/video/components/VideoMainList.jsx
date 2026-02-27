@@ -105,6 +105,8 @@ function VideoMainList({ history, dispatch }) {
 
       if (result.success && result.files) {
         console.log(`[VideoMainList] Found ${result.files.length} shared videos from Nextcloud`);
+        // Store in sessionStorage for Player to access
+        sessionStorage.setItem('nextcloud_videos', JSON.stringify(result.files));
         return result.files;
       } else {
         console.error('[VideoMainList] Failed to fetch Nextcloud videos:', result.error);

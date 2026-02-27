@@ -51,9 +51,9 @@ export function createVideosRouter({
 
   router.get("/", redirectMovies);
   router.get("/videos", loadMovies);
+  router.get("/videos/nextcloud/:fileId/stream", streamNextcloudVideo);  // Must be before generic routes
   router.get("/videos/:id", loadMovie);
   router.get("/videos/:folder/:fileName", streamingVideo);
-  router.get("/videos/nextcloud/:fileId/stream", streamNextcloudVideo);
 
   router.get("/series", loadSeries);
   router.get("/series/:id", loadShow);
@@ -133,15 +133,21 @@ export function createVideosRouter({
     // Handle Nextcloud videos (ID format: nextcloud-{fileId})
     if (id && id.startsWith('nextcloud-')) {
       console.log(`[VIDEO] Nextcloud video requested: ${id}`);
-      // For now, return a placeholder response indicating Nextcloud video
-      // The actual streaming will be handled by the frontend or a separate route
       const fileId = id.replace('nextcloud-', '');
+
+      // Return Nextcloud video metadata
+      // The Player component will use this to construct the streaming URL
       flushJSON(response, {
         id: id,
         fileId: fileId,
         isNextcloudShare: true,
-        // Frontend should handle streaming via Nextcloud API
-        message: "Nextcloud video - streaming handled by frontend"
+        nextcloudData: {
+          fileId: fileId,
+          // Player will get actual file details from sessionStorage
+        },
+        // Indicate that this is a Nextcloud video
+        folder: "Nextcloud",
+        name: `Video ${fileId}`
       });
       return;
     }
