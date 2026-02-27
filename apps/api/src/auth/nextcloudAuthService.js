@@ -1,4 +1,5 @@
 import { logD } from "../common/MessageUtil.js";
+import phpUnserialize from "php-session-unserialize";
 
 /**
  * Nextcloud Authentication Service
@@ -129,19 +130,24 @@ export async function checkNextcloudRedisSession({ redisClient, sessionId, nextc
       return { authenticated: false };
     }
 
-    // Default prefix if not provided
-    const prefix = nextcloudSessionPrefix || process.env.NEXTCLOUD_SESSION_PREFIX || 'nc_session:';
+    // Default prefix if not provided (Nextcloud typically uses PHPREDIS_SESSION:)
+    const prefix = nextcloudSessionPrefix || process.env.NEXTCLOUD_SESSION_PREFIX || 'PHPREDIS_SESSION:';
 
-    // Try both Nextcloud format and Spring Session format
+    // Try multiple session key formats
     const sessionKeys = [
-      `${prefix}${sessionId}`,                      // Nextcloud format: nc_session:abc123
-      `spring:session:sessions:${sessionId}`,        // Spring Session format
+      `${prefix}${sessionId}`,                          // Configured prefix (default: PHPREDIS_SESSION:abc123)
+      `PHPREDIS_SESSION:${sessionId}`,                  // Nextcloud with PHP Redis sessions
+      `spring:session:sessions:${sessionId}`,           // Spring Session format
+      `nc_session:${sessionId}`,                        // Alternative Nextcloud format
     ];
 
-    console.log(`[NEXTCLOUD_AUTH] Checking Nextcloud/Spring session with ID: ${sessionId}`);
-    console.log(`[NEXTCLOUD_AUTH] Will try keys: ${sessionKeys.join(', ')}`);
+    // Remove duplicates
+    const uniqueKeys = [...new Set(sessionKeys)];
 
-    for (const sessionKey of sessionKeys) {
+    console.log(`[NEXTCLOUD_AUTH] Checking Nextcloud/Spring session with ID: ${sessionId}`);
+    console.log(`[NEXTCLOUD_AUTH] Will try keys: ${uniqueKeys.join(', ')}`);
+
+    for (const sessionKey of uniqueKeys) {
       try {
         console.log(`[NEXTCLOUD_AUTH] Trying key: ${sessionKey}`);
         // Get session data from Redis (using promise-based API)
@@ -190,22 +196,62 @@ export async function checkNextcloudRedisSession({ redisClient, sessionId, nextc
 
         } catch (jsonError) {
           // Not JSON, try PHP serialized format (Nextcloud native)
-          logD(`[NEXTCLOUD_AUTH] Session data is not JSON, trying PHP serialized format`);
+          console.log(`[NEXTCLOUD_AUTH] Session data is not JSON, trying PHP session decoder`);
 
-          // PHP serialized format: look for user_id in serialized data
-          // Example: s:7:"user_id";s:5:"admin";
-          const patterns = [
-            /s:\d+:"user_id";s:\d+:"([^"]+)"/,           // PHP serialized string
-            /user_id["|']?\s*[:=]\s*["']([^"']+)/,        // Key-value pairs
-            /"user_id":"([^"]+)"/,                         // JSON-like in string
-            /login_name["|']?\s*[:=]\s*["']([^"']+)/,     // Alternative user field
-          ];
+          try {
+            // Use php-session-unserialize to parse PHP session data
+            const decoded = phpUnserialize(sessionData);
+            console.log(`[NEXTCLOUD_AUTH] Decoded PHP session:`, JSON.stringify(decoded).substring(0, 200));
 
-          for (const pattern of patterns) {
-            const match = sessionData.match(pattern);
-            if (match && match[1]) {
-              logD(`[NEXTCLOUD_AUTH] Found Nextcloud PHP session for user: ${match[1]}`);
-              return { authenticated: true, username: match[1] };
+            // Check for encrypted_session_data (Nextcloud uses encryption)
+            if (decoded && decoded.encrypted_session_data) {
+              console.log(`[NEXTCLOUD_AUTH] Found encrypted session data, attempting to decrypt...`);
+
+              // Nextcloud stores encrypted session data
+              // The encrypted data format in your sample shows it's encrypted with a key
+              // For now, we can't decrypt without the encryption key from Nextcloud config
+              // But we can verify the session exists and is active
+
+              // Try to find username in session data before encryption
+              // Sometimes Nextcloud stores login_name or user_id unencrypted
+              const username = decoded.user_id || decoded.login_name || decoded.loginname || decoded.user;
+
+              if (username) {
+                console.log(`[NEXTCLOUD_AUTH] Found username in PHP session: ${username}`);
+                return { authenticated: true, username };
+              }
+
+              // If no username found, session exists but we need to get username from elsewhere
+              console.log(`[NEXTCLOUD_AUTH] Session exists but username is encrypted`);
+              return { authenticated: true, username: null, encrypted: true };
+            }
+
+            // Try to find username in decoded session (unencrypted sessions)
+            const username = decoded.user_id || decoded.userId || decoded.username ||
+                            decoded.login_name || decoded.loginname || decoded.user;
+
+            if (username) {
+              console.log(`[NEXTCLOUD_AUTH] Found Nextcloud PHP session for user: ${username}`);
+              return { authenticated: true, username };
+            }
+
+          } catch (phpDecodeError) {
+            console.error(`[NEXTCLOUD_AUTH] Error decoding PHP session:`, phpDecodeError.message);
+
+            // Fallback: use regex patterns for simple PHP serialized format
+            const patterns = [
+              /s:\d+:"user_id";s:\d+:"([^"]+)"/,           // PHP serialized string
+              /user_id["|']?\s*[:=]\s*["']([^"']+)/,        // Key-value pairs
+              /"user_id":"([^"]+)"/,                         // JSON-like in string
+              /login_name["|']?\s*[:=]\s*["']([^"']+)/,     // Alternative user field
+            ];
+
+            for (const pattern of patterns) {
+              const match = sessionData.match(pattern);
+              if (match && match[1]) {
+                console.log(`[NEXTCLOUD_AUTH] Found username via regex: ${match[1]}`);
+                return { authenticated: true, username: match[1] };
+              }
             }
           }
         }

@@ -20,7 +20,7 @@ export function createRequireAuth({
     if (nextcloudAuthEnabled && ssoRedisEnabled && redisClient && req.sessionID) {
       console.log(`[AUTH] Checking Nextcloud Redis session for sessionID: ${req.sessionID}`);
 
-      const nextcloudSessionPrefix = process.env.NEXTCLOUD_SESSION_PREFIX || 'nc_session:';
+      const nextcloudSessionPrefix = process.env.NEXTCLOUD_SESSION_PREFIX || 'PHPREDIS_SESSION:';
       console.log(`[AUTH] About to call checkNextcloudRedisSession...`);
       const nextcloudSession = await checkNextcloudRedisSession({
         redisClient,
@@ -29,33 +29,39 @@ export function createRequireAuth({
       });
       console.log(`[AUTH] checkNextcloudRedisSession returned:`, nextcloudSession);
 
-      if (nextcloudSession.authenticated && nextcloudSession.username) {
-        console.log(`[AUTH] Authenticated via Nextcloud Redis session: ${nextcloudSession.username}`);
+      if (nextcloudSession.authenticated) {
+        if (nextcloudSession.username) {
+          console.log(`[AUTH] Authenticated via Nextcloud Redis session: ${nextcloudSession.username}`);
 
-        // Register user and create directories if needed
-        const appUser = upsertUser(nextcloudSession.username);
-        ensureUserDirectory(nextcloudSession.username);
+          // Register user and create directories if needed
+          const appUser = upsertUser(nextcloudSession.username);
+          ensureUserDirectory(nextcloudSession.username);
 
-        // Set up session
-        if (req.session) {
-          req.session.authenticated = true;
-          req.session.user = {
-            id: appUser.id,
-            username: nextcloudSession.username,
-            email: nextcloudSession.username,
-            authorities: ["ROLE_USER"],
-            videoPath: appUser.videoPath,
-          };
-          req.user = req.session.user;
-        } else {
-          req.user = {
-            id: appUser.id,
-            username: nextcloudSession.username,
-            videoPath: appUser.videoPath,
-          };
+          // Set up session
+          if (req.session) {
+            req.session.authenticated = true;
+            req.session.user = {
+              id: appUser.id,
+              username: nextcloudSession.username,
+              email: nextcloudSession.username,
+              authorities: ["ROLE_USER"],
+              videoPath: appUser.videoPath,
+            };
+            req.user = req.session.user;
+          } else {
+            req.user = {
+              id: appUser.id,
+              username: nextcloudSession.username,
+              videoPath: appUser.videoPath,
+            };
+          }
+
+          return next();
+        } else if (nextcloudSession.encrypted) {
+          // Nextcloud session is encrypted - we can't get username from Redis
+          // Fall through to check Spring Session or use existing session
+          console.log(`[AUTH] Found encrypted Nextcloud session, checking Spring Session for username`);
         }
-
-        return next();
       }
     }
 

@@ -257,7 +257,7 @@ export function createAuthRouter({
       if (nextcloudAuthEnabled && ssoRedisEnabled && sessionId) {
         const redisClient = getRedisClient();
         if (redisClient) {
-          const nextcloudSessionPrefix = process.env.NEXTCLOUD_SESSION_PREFIX || 'nc_session:';
+          const nextcloudSessionPrefix = process.env.NEXTCLOUD_SESSION_PREFIX || 'PHPREDIS_SESSION:';
           const nextcloudSessionKey = `${nextcloudSessionPrefix}${sessionId}`;
 
           console.log(`[LOGOUT] Attempting to delete Nextcloud session: ${nextcloudSessionKey}`);
