@@ -21,7 +21,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - /mnt:/mnt-host:ro
+      - /mnt/homevideo-smb:/mnt-host/homevideo-smb:ro
     secrets:
       - admin_password_hash
     profiles:
