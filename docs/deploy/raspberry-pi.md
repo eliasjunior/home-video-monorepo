@@ -19,7 +19,7 @@ Recreate prod services after config changes:
 
 ```bash
 docker compose --env-file .env.docker.web.prod --profile prod down
-docker compose --env-file .env.docker.web.prod --profile prod up -d --build api web
+docker compose --env-file .env.docker.web.prod --profile prod up -d --build api-prod web-prod
 ```
 
 ## Web Port Mapping
@@ -53,7 +53,7 @@ curl -I http://localhost:3000
 Check API container can see media folders:
 
 ```bash
-docker exec -it home-video-monorepo-api-1 sh -c "ls -la /videos && ls -la /videos/Movies"
+docker compose --profile prod exec api-prod sh -c "ls -la /videos && ls -la /videos/Movies"
 ```
 
 Access from another device:

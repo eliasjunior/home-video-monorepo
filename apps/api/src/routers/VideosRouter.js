@@ -42,7 +42,13 @@ export function createVideosRouter({
   function redirectMovies(_, res) {
     res.redirect("/videos");
   }
-  function loadMovies(_, response) {
+  function loadMovies(request, response) {
+    const shouldRefresh = isTruthy(request.query?.refresh);
+    const movieMap = getMovieMap();
+    if (!shouldRefresh && movieMap.allIds.length > 0) {
+      flushJSON(response, movieMap);
+      return;
+    }
     try {
       const videos = getVideos({ baseLocation: `${moviesAbsPath}` });
 
@@ -177,11 +183,17 @@ export function createVideosRouter({
     const { folder, fileName } = request.params;
     const movieMap = getMovieMap();
     const media = movieMap.byId[folder];
-    const fileAbsPath =
-      media && media.isFlat
-        ? `${moviesAbsPath}/${fileName}`
-        : `${moviesAbsPath}/${folder}/${fileName}`;
-    doStreaming({ request, response, fileAbsPath });
+    const nestedFileAbsPath = `${moviesAbsPath}/${folder}/${fileName}`;
+    const flatFileAbsPath = `${moviesAbsPath}/${fileName}`;
+    const useFlatPath = media && media.isFlat;
+    const fileAbsPath = useFlatPath ? flatFileAbsPath : nestedFileAbsPath;
+    const fallbackFileAbsPath = useFlatPath ? null : flatFileAbsPath;
+    doStreaming({
+      request,
+      response,
+      fileAbsPath,
+      fallbackFileAbsPath,
+    });
   }
 
   function streamingShow(request, response) {
@@ -190,7 +202,12 @@ export function createVideosRouter({
     doStreaming({ request, response, fileAbsPath });
   }
 
-  function doStreaming({ fileAbsPath, request, response }) {
+  function doStreaming({
+    fileAbsPath,
+    request,
+    response,
+    fallbackFileAbsPath = null,
+  }) {
     const { range } = request.headers;
     try {
       const statInfo = getFileDirInfo(fileAbsPath);
@@ -212,13 +229,16 @@ export function createVideosRouter({
           outputWriter: response,
         });
       } else {
-        logE(`NO RANGE ${fileAbsPath}. Streaming full file.`);
-        response.writeHead(SUCCESS_STATUS, {
-          "Accept-Ranges": "bytes",
-          "Content-Length": size,
-          "Content-Type": "video/mp4",
+        const fallbackRange = "bytes=0-";
+        logE(`NO RANGE ${fileAbsPath}. Falling back to initial chunk.`);
+        const { start, end } = getStartEndBytes(fallbackRange, size);
+        const headers = getHeaderStream({ start, end, size });
+        response.writeHead(PARTIAL_CONTENT_STATUS, headers);
+        const readStream = createStream({
+          fileAbsPath,
+          start,
+          end,
         });
-        const readStream = createStream({ fileAbsPath });
         streamEvents({
           readStream,
           useCaseLabel: "video",
@@ -226,6 +246,22 @@ export function createVideosRouter({
         });
       }
     } catch (error) {
+      if (
+        fallbackFileAbsPath &&
+        isPathResolutionError(error) &&
+        fallbackFileAbsPath !== fileAbsPath
+      ) {
+        logD(
+          `Retrying stream path as flat file. primary=${fileAbsPath} fallback=${fallbackFileAbsPath}`
+        );
+        doStreaming({
+          fileAbsPath: fallbackFileAbsPath,
+          request,
+          response,
+          fallbackFileAbsPath: null,
+        });
+        return;
+      }
       logE(`Attempting to stream file path ${fileAbsPath} has failed`, error);
       sendError({
         response,
@@ -242,6 +278,18 @@ export function createVideosRouter({
   }
 
   return router;
+}
+
+function isTruthy(value) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes";
+}
+
+function isPathResolutionError(error) {
+  const code = String(error?.code || "");
+  return code === "ENOENT" || code === "ENOTDIR";
 }
 
 export default createVideosRouter();

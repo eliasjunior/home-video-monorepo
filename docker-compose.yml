@@ -1,4 +1,5 @@
 services:
+  # Development service for local machine (macOS)
   api-dev:
     build:
       context: ./apps/api
@@ -7,11 +8,11 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - /Users/eliasjunior/Downloads/Videos:/videos
+      - /Users/eliasjunior/mnt/homevideo/Cine:/videos:ro
     profiles:
       - dev
 
-  api:
+  api-prod:
     build:
       context: ./apps/api
     env_file:
@@ -27,6 +28,7 @@ services:
     profiles:
       - prod
 
+  # Development service for local machine (macOS)
   web-dev:
     build:
       context: ./apps/web
@@ -43,19 +45,19 @@ services:
     profiles:
       - dev
 
-  web:
+  web-prod:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
       args:
-        REACT_APP_SERVER_HOST: ${REACT_APP_SERVER_HOST}
-        REACT_APP_SERVER_PROTOCOL: ${REACT_APP_SERVER_PROTOCOL}
+        REACT_APP_SERVER_HOST: ${REACT_APP_SERVER_HOST:-192.168.68.120}
+        REACT_APP_SERVER_PROTOCOL: ${REACT_APP_SERVER_PROTOCOL:-http}
     env_file:
       - ./.env.docker.web.prod
     ports:
       - "3000:80"
     depends_on:
-      - api
+      - api-prod
     profiles:
       - prod
 

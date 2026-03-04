@@ -3,7 +3,7 @@ import PropTypes from "prop-types";
 import "./player.css";
 import Loading from "components/common/Loading";
 import { SERIES_CATEG } from "common/constants";
-import { getTrackPath, getVideoPath, loadVideo } from "./Player.presenter";
+import { getTrackPath, getVideoSrc, loadVideo } from "./Player.presenter";
 import { getBlobUrl } from "services/Api";
 import { HAS_ERROR } from "main/Reducer";
 import { useHistory } from "react-router-dom";
@@ -72,20 +72,17 @@ function Player({ match, dispatch }) {
   useEffect(() => {
     if (!media) return () => {};
     let active = true;
-    let videoUrl = "";
     let trackUrl = "";
 
     (async () => {
       try {
-        videoUrl = await getBlobUrl(
-          getVideoPath({ mediaType: params.type, media })
-        );
+        const directVideoUrl = getVideoSrc({ mediaType: params.type, media });
         const trackPath = getTrackPath({ mediaType: params.type, media });
         if (trackPath) {
           trackUrl = await getBlobUrl(trackPath);
         }
         if (active) {
-          setVideoSrc(videoUrl);
+          setVideoSrc(directVideoUrl);
           setTrackSrc(trackUrl || "");
         }
       } catch (err) {
@@ -95,7 +92,6 @@ function Player({ match, dispatch }) {
 
     return () => {
       active = false;
-      if (videoUrl) URL.revokeObjectURL(videoUrl);
       if (trackUrl) URL.revokeObjectURL(trackUrl);
     };
   }, [media, params.type, dispatch]);
@@ -192,7 +188,7 @@ function Player({ match, dispatch }) {
           preload="metadata"
           controls
           id="videoPlayer"
-          crossOrigin="anonymous"
+          crossOrigin="use-credentials"
           autoPlay={true}
         >
           <source

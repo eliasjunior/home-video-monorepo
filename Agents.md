@@ -69,7 +69,7 @@ Agents must:
 ### 3. Docker / Compose
 - Bind mount host path into API container:
   - `/mnt/homevideo-smb:/mnt-host/homevideo-smb:ro`
-- Mount only in `api` service (not `web`).
+- Mount only in `api-prod` service (not `web-prod`).
 - Update API env:
   - `VIDEO_SOURCE_PROFILE=local`
   - `VIDEO_PATH_LOCAL=/mnt-host/homevideo-smb/Cine`
@@ -89,7 +89,7 @@ Agents must:
   - `valid users = apireader`
   - `read only = yes`
 - Optional firewall on `192.168.68.100` to allow SMB only from `192.168.68.120`.
-- Only `api` container receives media volume.
+- Only `api-prod` container receives media volume.
 - Keep mount and container bind as read-only.
 
 
@@ -143,5 +143,4 @@ Enable the API host (`192.168.68.120`) to read media from the HDD attached to an
    - clean stale `/etc/fstab` entries,
    - backup final `smb.conf` and `fstab`,
    - reboot both Pis and verify auto-start behavior.
-
 

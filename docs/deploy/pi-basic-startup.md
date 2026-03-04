@@ -64,7 +64,7 @@ Use this when you want only the basics to get the app running now.
 - [ ] Run preflight for manual prod startup:
   - `./scripts/pi/preflight-prod.sh`
 - [ ] Start app manually:
-  - `docker compose --env-file .env.docker.web.prod --profile prod up -d --build api web`
+  - `docker compose --env-file .env.docker.web.prod --profile prod up -d --build api-prod web-prod`
 - [ ] Verify app:
   - `docker compose --env-file .env.docker.web.prod --profile prod ps`
   - `curl -I http://localhost:3000`

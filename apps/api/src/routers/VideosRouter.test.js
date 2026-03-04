@@ -110,6 +110,46 @@ describe("VideosRouter", () => {
     expect(response.body).toHaveProperty("message");
   });
 
+  it("GET /videos returns cached map when available", async () => {
+    const authHeader = await getAuthHeader(app);
+    const { setMovieMap } = require("../common/Util");
+    const cachedPayload = {
+      byId: { cached: { id: "cached" } },
+      allIds: ["cached"],
+    };
+    setMovieMap(cachedPayload);
+
+    const response = await request(app)
+      .get("/videos")
+      .set("Authorization", authHeader);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(cachedPayload);
+    expect(dataAccess.getVideos).not.toHaveBeenCalled();
+  });
+
+  it("GET /videos refresh=1 bypasses cache and rescans", async () => {
+    const authHeader = await getAuthHeader(app);
+    const { setMovieMap } = require("../common/Util");
+    setMovieMap({
+      byId: { stale: { id: "stale" } },
+      allIds: ["stale"],
+    });
+    const freshPayload = {
+      byId: { fresh: { id: "fresh" } },
+      allIds: ["fresh"],
+    };
+    dataAccess.getVideos.mockReturnValueOnce(freshPayload);
+
+    const response = await request(app)
+      .get("/videos?refresh=1")
+      .set("Authorization", authHeader);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual(freshPayload);
+    expect(dataAccess.getVideos).toHaveBeenCalledTimes(1);
+  });
+
   it("GET / redirects to /videos", async () => {
     const authHeader = await getAuthHeader(app);
     const response = await request(app)
@@ -241,9 +281,16 @@ describe("VideosRouter", () => {
     expect(streamingUtil.streamEvents).toHaveBeenCalled();
   });
 
-  it("GET /videos/:folder/:fileName streams full file when range is missing", async () => {
+  it("GET /videos/:folder/:fileName starts partial stream when range is missing", async () => {
     const authHeader = await getAuthHeader(app);
-    dataAccess.getFileDirInfo.mockReturnValueOnce({ size: 0 });
+    dataAccess.getFileDirInfo.mockReturnValueOnce({ size: 1000 });
+    streamingUtil.getStartEndBytes.mockReturnValueOnce({ start: 0, end: 99 });
+    streamingUtil.getHeaderStream.mockReturnValueOnce({
+      "Content-Range": "bytes 0-99/1000",
+      "Accept-Ranges": "bytes",
+      "Content-Length": 100,
+      "Content-Type": "video/mp4",
+    });
     streamingData.createStream.mockReturnValueOnce({ on: jest.fn() });
     streamingUtil.streamEvents.mockImplementationOnce(({ outputWriter }) => {
       outputWriter.end();
@@ -253,7 +300,8 @@ describe("VideosRouter", () => {
       .get("/videos/Movies/movie.mp4")
       .set("Authorization", authHeader);
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(206);
+    expect(streamingUtil.getStartEndBytes).toHaveBeenCalledWith("bytes=0-", 1000);
     expect(streamingUtil.streamEvents).toHaveBeenCalled();
   });
 
@@ -301,6 +349,37 @@ describe("VideosRouter", () => {
 
     const response = await request(app)
       .get("/videos/FlatMovie/FlatMovie.mp4")
+      .set("Authorization", authHeader);
+
+    expect(response.status).toBe(200);
+    expect(streamingUtil.streamEvents).toHaveBeenCalled();
+  });
+
+  it("GET /videos/:folder/:fileName retries flat path when nested path resolves to ENOTDIR", async () => {
+    const authHeader = await getAuthHeader(app);
+    const { setMovieMap } = require("../common/Util");
+    setMovieMap({
+      byId: {},
+      allIds: [],
+    });
+    dataAccess.getFileDirInfo.mockImplementation((fileAbsPath) => {
+      if (fileAbsPath.endsWith("/Movies/Pretty Movie/Pretty.Movie.2013.mp4")) {
+        const err = new Error("not a directory");
+        err.code = "ENOTDIR";
+        throw err;
+      }
+      if (fileAbsPath.endsWith("/Movies/Pretty.Movie.2013.mp4")) {
+        return { size: 0 };
+      }
+      throw new Error(`unexpected path: ${fileAbsPath}`);
+    });
+    streamingData.createStream.mockReturnValueOnce({ on: jest.fn() });
+    streamingUtil.streamEvents.mockImplementationOnce(({ outputWriter }) => {
+      outputWriter.end();
+    });
+
+    const response = await request(app)
+      .get("/videos/Pretty%20Movie/Pretty.Movie.2013.mp4")
       .set("Authorization", authHeader);
 
     expect(response.status).toBe(200);

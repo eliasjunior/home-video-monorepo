@@ -83,38 +83,38 @@ docker compose --profile dev logs -f
 Follow logs for API only:
 
 ```bash
-docker compose --profile dev logs -f api
+docker compose --profile dev logs -f api-dev
 ```
 
 Follow logs for Web only:
 
 ```bash
-docker compose --profile dev logs -f web
+docker compose --profile dev logs -f web-dev
 ```
 
 Restart both services:
 
 ```bash
-docker compose --profile dev restart api web
+docker compose --profile dev restart api-dev web-dev
 ```
 
 Rebuild only one service:
 
 ```bash
-docker compose --profile dev up -d --build api
-docker compose --profile dev up -d --build web
+docker compose --profile dev up -d --build api-dev
+docker compose --profile dev up -d --build web-dev
 ```
 
 Open a shell inside API container:
 
 ```bash
-docker compose --profile dev exec api sh
+docker compose --profile dev exec api-dev sh
 ```
 
 Open a shell inside Web container:
 
 ```bash
-docker compose --profile dev exec web sh
+docker compose --profile dev exec web-dev sh
 ```
 
 ## Frontend and API URLs

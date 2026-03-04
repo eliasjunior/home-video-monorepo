@@ -22,7 +22,6 @@ export function listFolderMedia({
   getValidFileList,
   isThereVideoFile,
   fileExtEqual,
-  loadFiles,
   mapMedia,
 } = {}) {
   const allFolders = getFolderName(baseLocation, { readDirectory });
@@ -36,7 +35,7 @@ export function listFolderMedia({
       isThereVideoFile(fileName, fileExtEqual)
     );
   const buildFolderTable = (prev, folderName) => {
-    const files = loadFiles(folderName, baseLocation);
+    const files = validFilesByFolder[folderName];
     const media = mapMedia({ files, folderName, fileExtEqual });
     prev.byId[folderName] = media;
     prev.allIds.push(media.id);
@@ -65,13 +64,20 @@ export function listFlatMedia({
   const topLevelVideoFiles = validTopLevelFiles.filter((fileName) =>
     isThereVideoFile(fileName, fileExtEqual)
   );
+  const filesById = validTopLevelFiles.reduce((acc, fileName) => {
+    const ext = fileExtEqual(fileName);
+    const id = fileName.slice(0, fileName.length - ext.length);
+    if (!acc[id]) {
+      acc[id] = [];
+    }
+    acc[id].push(fileName);
+    return acc;
+  }, {});
 
   return topLevelVideoFiles.reduce((flatTable, videoName) => {
     const id = deriveMediaId(videoName, fileExtEqual);
     assertNoIdCollision({ id, baseLocation, existingById });
-    const siblingFiles = validTopLevelFiles.filter((fileName) =>
-      fileName.startsWith(`${id}.`)
-    );
+    const siblingFiles = filesById[id] || [];
     const media = mapMedia({
       files: siblingFiles,
       folderName: id,
@@ -93,4 +99,3 @@ export function mergeMediaTables(folderTable, flatTable) {
     allIds: [...folderTable.allIds, ...flatTable.allIds],
   };
 }
-

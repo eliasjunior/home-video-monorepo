@@ -54,7 +54,7 @@ ls -la /mnt/gdrive-videos
 
 ## 3) Docker and API Env Wiring
 
-`docker-compose.yml` (`api` service):
+`docker-compose.yml` (`api-prod` service):
 
 ```yaml
 volumes:
@@ -75,13 +75,13 @@ Recreate services:
 
 ```bash
 docker compose --profile prod down
-docker compose --profile prod up -d --build api web
+docker compose --profile prod up -d --build api-prod web-prod
 ```
 
 Verify inside API container:
 
 ```bash
-docker compose --profile prod exec api sh -lc 'ls -la /mnt-host/gdrive-videos && ls -la /mnt-host/gdrive-videos/Movies'
+docker compose --profile prod exec api-prod sh -lc 'ls -la /mnt-host/gdrive-videos && ls -la /mnt-host/gdrive-videos/Movies'
 ```
 
 ## 4) Required Media Layout

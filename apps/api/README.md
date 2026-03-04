@@ -64,7 +64,7 @@ MOVIES_DIR=Movies
 SERIES_DIR=Series
 ```
 
-`docker-compose.yml` (`api` service) must bind:
+`docker-compose.yml` (`api-prod` service) must bind:
 ```yaml
 volumes:
   - /mnt:/mnt-host:ro

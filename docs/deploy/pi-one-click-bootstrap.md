@@ -6,7 +6,7 @@
 This guide sets up a fresh Raspberry Pi to auto-start:
 
 1. `rclone` mount (`gdrive:` -> `/mnt/gdrive-videos`)
-2. Home Video Docker Compose stack (`api` + `web`)
+2. Home Video Docker Compose stack (`api-prod` + `web-prod`)
 
 After setup, both services start automatically on reboot.
 

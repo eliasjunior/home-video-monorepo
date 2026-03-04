@@ -138,7 +138,7 @@ sed -i.bak 's/^IMAGES_PORT_SERVER=.*/IMAGES_PORT_SERVER=8080/' /home/gandalf/Pro
 sed -i.bak 's|^IMAGE_FALLBACK_BASE_URL=.*|IMAGE_FALLBACK_BASE_URL=http://192.168.68.120:8080/public|' /home/gandalf/Projects/home-video-monorepo/.env.docker.api.prod
 
 cd /home/gandalf/Projects/home-video-monorepo
-docker compose --profile prod up --build -d --force-recreate
+docker compose --profile prod up --build -d --force-recreate api-prod web-prod
 ```
 
 ## Common Issue: 401 Unauthorized After Login (HTTP + Production)
@@ -166,7 +166,7 @@ git pull
 
 3) Rebuild/recreate containers:
 ```bash
-docker compose --profile prod up --build -d --force-recreate
+docker compose --profile prod up --build -d --force-recreate api-prod web-prod
 ```
 
 Verification:
