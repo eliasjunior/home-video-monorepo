@@ -46,6 +46,13 @@ Notes:
 - `VIDEO_PATH` is still supported for backward compatibility.
 - If `VIDEO_SOURCE_PROFILE` points to a path that is not set, the API falls back to the local path.
 
+Video catalog cache (optional):
+
+```env
+VIDEO_CACHE_REFRESH_INTERVAL_MS=1800000 # default 30 minutes
+VIDEO_CACHE_SNAPSHOT_FILE=/app/data/videos-cache.json
+```
+
 ### Google Drive Source (via `rclone`)
 
 The API does not call Google Drive APIs directly. It reads local filesystem paths.
@@ -182,6 +189,8 @@ Public:
 
 Protected:
 - All existing video/series endpoints require `Authorization: Bearer <accessToken>`.
+- Cache diagnostics:
+  - `GET /videos/cache/status`
 - Progress endpoints (require auth):
   - `GET /progress/:videoId`
   - `POST /progress`

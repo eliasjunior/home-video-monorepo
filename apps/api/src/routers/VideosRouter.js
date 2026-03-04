@@ -18,6 +18,7 @@ import {
   setSeriesMap,
   getSeriesMap,
 } from "../common/Util";
+import { getMovieCatalogCacheStatus } from "../composition/movieCatalogCache";
 import { sendError } from "./RouterUtil";
 export function createVideosRouter({
   dataAccess = DataAccess,
@@ -32,6 +33,7 @@ export function createVideosRouter({
 
   router.get("/", redirectMovies);
   router.get("/videos", loadMovies);
+  router.get("/videos/cache/status", loadMovieCacheStatus);
   router.get("/videos/:id", loadMovie);
   router.get("/videos/:folder/:fileName", streamingVideo);
 
@@ -80,6 +82,10 @@ export function createVideosRouter({
         error,
       });
     }
+  }
+  function loadMovieCacheStatus(_, response) {
+    const status = getMovieCatalogCacheStatus();
+    flushJSON(response, status);
   }
   function loadSeries(_, response) {
     try {

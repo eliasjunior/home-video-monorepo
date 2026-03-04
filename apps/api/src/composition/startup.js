@@ -1,6 +1,10 @@
 import { logD } from "../common/MessageUtil";
 import { loadRemoteJsonFile } from "../libs/HttpLib";
 import { setMoviesMap } from "../libs/MemoryLib";
+import {
+  initializeMovieCatalogCache,
+  scheduleMovieCatalogRefresh,
+} from "./movieCatalogCache";
 
 export async function fetchAndLogJsonData({
   remoteJsonUrl,
@@ -58,6 +62,8 @@ export function startServer({
   env = process.env,
   consoleRef = console,
   initializeImageMapFn = initializeImageMap,
+  initializeMovieCatalogCacheFn = initializeMovieCatalogCache,
+  scheduleMovieCatalogRefreshFn = scheduleMovieCatalogRefresh,
 } = {}) {
   if (env.NODE_ENV === "test") {
     return null;
@@ -69,6 +75,7 @@ export function startServer({
     consoleRef.log(`Movies folder: ${appConfig.moviesDir}`);
     consoleRef.log(`baseLocation: ${appConfig.baseLocation}`);
     await initializeImageMapFn({ appConfig, env, consoleRef });
+    await initializeMovieCatalogCacheFn({ appConfig, env, consoleRef });
+    scheduleMovieCatalogRefreshFn({ appConfig, env, consoleRef });
   });
 }
-

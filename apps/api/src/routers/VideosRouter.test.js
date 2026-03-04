@@ -110,6 +110,18 @@ describe("VideosRouter", () => {
     expect(response.body).toHaveProperty("message");
   });
 
+  it("GET /videos/cache/status returns cache metadata", async () => {
+    const authHeader = await getAuthHeader(app);
+
+    const response = await request(app)
+      .get("/videos/cache/status")
+      .set("Authorization", authHeader);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty("itemCount");
+    expect(response.body).toHaveProperty("refreshIntervalMs");
+  });
+
   it("GET /videos returns cached map when available", async () => {
     const authHeader = await getAuthHeader(app);
     const { setMovieMap } = require("../common/Util");

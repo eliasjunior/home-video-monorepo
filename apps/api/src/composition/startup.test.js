@@ -70,4 +70,3 @@ describe("startup composition", () => {
     expect(app.listen).not.toHaveBeenCalled();
   });
 });
-
