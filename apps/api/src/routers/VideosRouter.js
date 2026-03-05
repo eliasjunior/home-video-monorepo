@@ -281,6 +281,9 @@ export function createVideosRouter({
           "Accept-Ranges": "bytes",
           "Content-Length": size,
           "Content-Type": "video/mp4",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0"
         });
         const readStream = createStream({ fileAbsPath });
         streamEvents({
@@ -332,15 +335,22 @@ export function createVideosRouter({
       const headers = {
         'Authorization': `Basic ${auth}`,
       };
-      if (req.headers.range) {
+
+      const hasRangeRequest = !!req.headers.range;
+      if (hasRangeRequest) {
+        console.log(`[NEXTCLOUD_STREAM] Range request: ${req.headers.range}`);
         headers['Range'] = req.headers.range;
+      } else {
+        console.log(`[NEXTCLOUD_STREAM] No Range header in request`);
       }
 
       // Fetch from Nextcloud
       const fetch = (await import('node-fetch')).default;
       const ncResponse = await fetch(webdavUrl, { headers });
 
-      if (!ncResponse.ok) {
+      console.log(`[NEXTCLOUD_STREAM] Nextcloud response status: ${ncResponse.status}`);
+
+      if (!ncResponse.ok && ncResponse.status !== 206) {
         console.error(`[NEXTCLOUD_STREAM] Nextcloud returned ${ncResponse.status}`);
         return sendError({
           response,
@@ -349,12 +359,24 @@ export function createVideosRouter({
         });
       }
 
-      // Forward headers
+      // Forward headers - preserve status code (200 or 206)
       response.status(ncResponse.status);
-      response.set('Content-Type', ncResponse.headers.get('content-type'));
-      response.set('Content-Length', ncResponse.headers.get('content-length'));
-      response.set('Accept-Ranges', ncResponse.headers.get('accept-ranges') || 'bytes');
+      response.set('Content-Type', ncResponse.headers.get('content-type') || 'video/mp4');
+
+      // Always set Accept-Ranges to advertise support
+      response.set('Accept-Ranges', 'bytes');
+
+      // Cache control headers to prevent browser from caching full responses
+      response.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      response.set('Pragma', 'no-cache');
+      response.set('Expires', '0');
+
+      if (ncResponse.headers.get('content-length')) {
+        response.set('Content-Length', ncResponse.headers.get('content-length'));
+      }
+
       if (ncResponse.headers.get('content-range')) {
+        console.log(`[NEXTCLOUD_STREAM] Content-Range: ${ncResponse.headers.get('content-range')}`);
         response.set('Content-Range', ncResponse.headers.get('content-range'));
       }
 

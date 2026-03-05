@@ -214,9 +214,22 @@ export async function createSessionMiddleware() {
       }
 
       // If no Spring session cookie was present at all, skip session middleware
-      // (let auth middleware handle authentication via JWT)
+      // (let auth middleware handle authentication via JWT or Nextcloud session)
       if (!springSessionId) {
-        console.log(`[SESSION] No Spring session cookie found, skipping session middleware`);
+        console.log(`[SESSION] No Spring session cookie found, checking for Nextcloud session`);
+
+        // Check if nc_session_id exists for Nextcloud SSO
+        const ncSessionMatch = cookies ? cookies.match(/\bnc_session_id=([^;]+)/) : null;
+        if (ncSessionMatch) {
+          const ncSessionId = ncSessionMatch[1];
+          console.log(`[SESSION] Found Nextcloud session cookie: ${ncSessionId}`);
+          // Set sessionID so auth middleware can check Nextcloud Redis
+          req.sessionID = ncSessionId;
+          req.session = null;  // No Express session yet
+          return next();
+        }
+
+        console.log(`[SESSION] No session cookie found, skipping session middleware`);
         req.session = null;
         req.sessionID = null;
         return next();

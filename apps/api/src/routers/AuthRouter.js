@@ -462,16 +462,28 @@ export function createAuthRouter({
       // Get credentials and options from request body
       const { appPassword, options = {} } = req.body || {};
 
-      if (!appPassword) {
-        return res.status(400).json({ message: "App password required" }).end();
+      // Try to get session token from Nextcloud session (preferred over app password)
+      let sessionToken = null;
+      if (req.sessionID) {
+        const nextcloudSessionPrefix = process.env.NEXTCLOUD_SESSION_PREFIX || 'PHPREDIS_SESSION:';
+        const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'SESSIONID';
+        sessionToken = `${sessionCookieName}=${req.sessionID}`;
+        console.log(`[NEXTCLOUD_SHARES] Using Nextcloud session token for API calls`);
+      }
+
+      // Require either session token or app password
+      if (!sessionToken && !appPassword) {
+        return res.status(400).json({ message: "Either authenticated session or app password required" }).end();
       }
 
       console.log(`[NEXTCLOUD_SHARES] Proxying shares request for user: ${username}`);
 
       // Fetch shares using backend function (avoids CORS)
+      // Prefer session token over app password
       const result = await getNextcloudShares({
         username,
-        appPassword,
+        appPassword: sessionToken ? undefined : appPassword,
+        sessionToken,
         nextcloudUrl,
         options
       });
@@ -510,16 +522,27 @@ export function createAuthRouter({
       // Get credentials from request body
       const { appPassword } = req.body || {};
 
-      if (!appPassword) {
-        return res.status(400).json({ message: "App password required" }).end();
+      // Try to get session token from Nextcloud session (preferred over app password)
+      let sessionToken = null;
+      if (req.sessionID) {
+        const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'SESSIONID';
+        sessionToken = `${sessionCookieName}=${req.sessionID}`;
+        console.log(`[NEXTCLOUD_SHARES] Using Nextcloud session token for API calls`);
+      }
+
+      // Require either session token or app password
+      if (!sessionToken && !appPassword) {
+        return res.status(400).json({ message: "Either authenticated session or app password required" }).end();
       }
 
       console.log(`[NEXTCLOUD_SHARES] Proxying shared videos request for user: ${username}`);
 
       // Fetch shared videos using backend function (avoids CORS)
+      // Prefer session token over app password
       const result = await getSharedVideoFiles({
         username,
-        appPassword,
+        appPassword: sessionToken ? undefined : appPassword,
+        sessionToken,
         nextcloudUrl
       });
 

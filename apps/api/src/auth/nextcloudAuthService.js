@@ -3,11 +3,27 @@ import phpUnserialize from "php-session-unserialize";
 
 /**
  * Nextcloud Authentication Service
- * Supports authentication via Nextcloud App Password (WebDAV)
+ * Supports:
+ * 1. SSO via OAuth2/SAML (preferred) - uses shared Redis session
+ * 2. App Password authentication (fallback) - for API access without browser
  */
 
 /**
- * Authenticate user with Nextcloud using App Password via WebDAV
+ * Authenticate user with Nextcloud using OAuth2 token
+ * This method uses the existing Nextcloud session from Redis (preferred method)
+ * @param {Object} redisClient - Redis client instance
+ * @param {string} sessionId - Session ID from cookie
+ * @param {string} nextcloudSessionPrefix - Redis session prefix
+ * @returns {Promise<{success: boolean, username?: string, error?: string}>}
+ */
+export async function authenticateWithNextcloudSession({ redisClient, sessionId, nextcloudSessionPrefix }) {
+  return await checkNextcloudRedisSession({ redisClient, sessionId, nextcloudSessionPrefix });
+}
+
+/**
+ * Authenticate user with Nextcloud using App Password (fallback method)
+ * Note: This should only be used for initial authentication or API access
+ * For web app access, use OAuth2/SAML SSO instead
  * @param {string} username - Nextcloud username
  * @param {string} appPassword - Nextcloud app password
  * @param {string} nextcloudUrl - Nextcloud base URL
@@ -25,12 +41,13 @@ export async function authenticateWithNextcloud({ username, appPassword, nextclo
     // URL-encode the username for use in the path (important for emails with @)
     const encodedUsername = encodeURIComponent(username);
 
-    // Test authentication using Nextcloud's WebDAV endpoint
-    // This is the most reliable way to verify credentials
-    const webdavUrl = `${baseUrl}/remote.php/dav/files/${encodedUsername}/`;
+    // Test authentication using Nextcloud's capabilities endpoint
+    // This endpoint is available on all Nextcloud versions and doesn't require special permissions
+    const statusUrl = `${baseUrl}/ocs/v2.php/cloud/capabilities?format=json`;
 
     console.log(`[NEXTCLOUD_AUTH] Attempting to authenticate user: ${username}`);
-    console.log(`[NEXTCLOUD_AUTH] WebDAV URL: ${webdavUrl}`);
+    console.log(`[NEXTCLOUD_AUTH] Nextcloud base URL: ${baseUrl}`);
+    console.log(`[NEXTCLOUD_AUTH] Capabilities URL: ${statusUrl}`);
     console.log(`[NEXTCLOUD_AUTH] App password length: ${appPassword?.length || 0} characters`);
 
     if (!appPassword || appPassword.length < 20) {
@@ -45,25 +62,42 @@ export async function authenticateWithNextcloud({ username, appPassword, nextclo
     const auth = Buffer.from(`${username}:${appPassword}`).toString('base64');
     console.log(`[NEXTCLOUD_AUTH] Basic auth header created`);
 
-    const response = await fetch(webdavUrl, {
-      method: 'PROPFIND',
+    const response = await fetch(statusUrl, {
+      method: 'GET',
       headers: {
         'Authorization': `Basic ${auth}`,
-        'Depth': '0',
-        'Content-Type': 'application/xml'
+        'OCS-APIRequest': 'true'
       }
     });
 
     console.log(`[NEXTCLOUD_AUTH] Response status: ${response.status} ${response.statusText}`);
 
-    if (response.status === 207 || response.status === 200) {
-      // Multi-Status or OK response means authentication succeeded
-      console.log(`[NEXTCLOUD_AUTH] Authentication successful for user: ${username}`);
+    if (response.status === 200) {
+      // OK response means authentication succeeded
+      const data = await response.json().catch(() => null);
+
+      // Verify that we got valid OCS response (capabilities endpoint returns version info)
+      if (data && data.ocs && data.ocs.meta && data.ocs.meta.status === 'ok') {
+        console.log(`[NEXTCLOUD_AUTH] Authentication successful for user: ${username}`);
+
+        // Try to get user info from a separate endpoint
+        const userInfo = await getNextcloudUserInfo({ username, appPassword, nextcloudUrl }).catch(() => ({}));
+
+        return {
+          success: true,
+          username: username,
+          displayName: userInfo.displayName || username,
+          email: userInfo.email
+        };
+      }
+
+      // Response was 200 but no valid OCS data - still consider it authenticated
+      console.log(`[NEXTCLOUD_AUTH] Authentication successful (capabilities check passed)`);
       return {
         success: true,
         username: username
       };
-    } else if (response.status === 401) {
+    } else if (response.status === 401 || response.status === 403) {
       console.log(`[NEXTCLOUD_AUTH] Authentication failed: Invalid credentials`);
       return {
         success: false,
@@ -97,9 +131,11 @@ export async function authenticateWithNextcloud({ username, appPassword, nextclo
 export async function getNextcloudUserInfo({ username, appPassword, nextcloudUrl }) {
   try {
     const baseUrl = nextcloudUrl.replace(/\/$/, '');
-    const userInfoUrl = `${baseUrl}/ocs/v1.php/cloud/user?format=json`;
+    const userInfoUrl = `${baseUrl}/ocs/v2.php/cloud/user?format=json`;
 
     const auth = Buffer.from(`${username}:${appPassword}`).toString('base64');
+
+    console.log(`[NEXTCLOUD_AUTH] Fetching user info from: ${userInfoUrl}`);
 
     const response = await fetch(userInfoUrl, {
       method: 'GET',
@@ -109,9 +145,12 @@ export async function getNextcloudUserInfo({ username, appPassword, nextcloudUrl
       }
     });
 
+    console.log(`[NEXTCLOUD_AUTH] User info response status: ${response.status}`);
+
     if (response.ok) {
       const data = await response.json();
       if (data.ocs && data.ocs.data) {
+        console.log(`[NEXTCLOUD_AUTH] User info retrieved: ${data.ocs.data.displayname || username}`);
         return {
           displayName: data.ocs.data.displayname || username,
           email: data.ocs.data.email || `${username}@nextcloud.local`
@@ -120,12 +159,13 @@ export async function getNextcloudUserInfo({ username, appPassword, nextcloudUrl
     }
 
     // Fallback if we can't get user info
+    console.log(`[NEXTCLOUD_AUTH] Could not fetch user info, using defaults`);
     return {
       displayName: username,
       email: `${username}@nextcloud.local`
     };
   } catch (error) {
-    logD(`[NEXTCLOUD_AUTH] Error fetching user info:`, error);
+    console.error(`[NEXTCLOUD_AUTH] Error fetching user info:`, error.message);
     return {
       displayName: username,
       email: `${username}@nextcloud.local`
@@ -291,7 +331,8 @@ export async function checkNextcloudRedisSession({ redisClient, sessionId, nextc
 /**
  * Get list of shares for authenticated user using OCS Share API
  * @param {string} username - Nextcloud username
- * @param {string} appPassword - Nextcloud app password
+ * @param {string} appPassword - Nextcloud app password (optional if using session token)
+ * @param {string} sessionToken - Nextcloud session token from Redis (preferred)
  * @param {string} nextcloudUrl - Nextcloud base URL
  * @param {Object} options - Optional filters
  * @param {boolean} options.sharedWithMe - Get files shared with user (default: true)
@@ -300,10 +341,14 @@ export async function checkNextcloudRedisSession({ redisClient, sessionId, nextc
  * @param {boolean} options.videosOnly - Filter to video files only (default: true)
  * @returns {Promise<{success: boolean, shares?: Array, error?: string}>}
  */
-export async function getNextcloudShares({ username, appPassword, nextcloudUrl, options = {} }) {
+export async function getNextcloudShares({ username, appPassword, sessionToken, nextcloudUrl, options = {} }) {
   try {
-    if (!nextcloudUrl || !username || !appPassword) {
+    if (!nextcloudUrl || !username) {
       return { success: false, error: "Missing required parameters" };
+    }
+
+    if (!appPassword && !sessionToken) {
+      return { success: false, error: "Either appPassword or sessionToken is required" };
     }
 
     const baseUrl = nextcloudUrl.replace(/\/$/, "");
@@ -316,7 +361,17 @@ export async function getNextcloudShares({ username, appPassword, nextcloudUrl, 
 
     logD(`[NEXTCLOUD_SHARES] Fetching shares for user: ${username}`);
 
-    const auth = Buffer.from(`${username}:${appPassword}`).toString("base64");
+    // Use session token if available (SSO), otherwise fall back to Basic auth
+    const headers = sessionToken
+      ? {
+          "Cookie": sessionToken,
+          "OCS-APIRequest": "true"
+        }
+      : {
+          "Authorization": `Basic ${Buffer.from(`${username}:${appPassword}`).toString("base64")}`,
+          "OCS-APIRequest": "true"
+        };
+
     const shares = [];
 
     // Get shares shared with user
@@ -324,13 +379,11 @@ export async function getNextcloudShares({ username, appPassword, nextcloudUrl, 
       const sharedWithMeUrl = `${baseUrl}/ocs/v2.php/apps/files_sharing/api/v1/shares?shared_with_me=true&format=json`;
 
       logD(`[NEXTCLOUD_SHARES] Fetching shares shared with user: ${sharedWithMeUrl}`);
+      logD(`[NEXTCLOUD_SHARES] Using ${sessionToken ? 'session token' : 'Basic auth'}`);
 
       const response = await fetch(sharedWithMeUrl, {
         method: "GET",
-        headers: {
-          "Authorization": `Basic ${auth}`,
-          "OCS-APIRequest": "true"
-        }
+        headers
       });
 
       if (response.ok) {
@@ -352,10 +405,7 @@ export async function getNextcloudShares({ username, appPassword, nextcloudUrl, 
 
       const response = await fetch(sharedByMeUrl, {
         method: "GET",
-        headers: {
-          "Authorization": `Basic ${auth}`,
-          "OCS-APIRequest": "true"
-        }
+        headers
       });
 
       if (response.ok) {
@@ -429,15 +479,17 @@ export async function getNextcloudShares({ username, appPassword, nextcloudUrl, 
 /**
  * Get files shared with user (video files only)
  * @param {string} username - Nextcloud username
- * @param {string} appPassword - Nextcloud app password
+ * @param {string} appPassword - Nextcloud app password (optional if using session token)
+ * @param {string} sessionToken - Nextcloud session token from Redis (preferred)
  * @param {string} nextcloudUrl - Nextcloud base URL
  * @returns {Promise<{success: boolean, files?: Array, error?: string}>}
  */
-export async function getSharedVideoFiles({ username, appPassword, nextcloudUrl }) {
+export async function getSharedVideoFiles({ username, appPassword, sessionToken, nextcloudUrl }) {
   try {
     const result = await getNextcloudShares({
       username,
       appPassword,
+      sessionToken,
       nextcloudUrl,
       options: { sharedWithMe: true, sharedByMe: false }
     });

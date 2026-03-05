@@ -43,8 +43,9 @@ services:
       - NEXTCLOUD_DATA_PATH=/tmp #/var/snap/nextcloud/common/nextcloud/data
       - NEXTCLOUD_SYNC_EXISTING=false
       - NEXTCLOUD_AUTH_ENABLED=true
-      - NEXTCLOUD_URL=https://spendingbetter.com/nextcloud
-      - REDIS_PASSWORD=${REDIS_PASSWORD:""}
+      - NEXTCLOUD_URL=http://host.docker.internal:8080
+#      - REDIS_PASSWORD=RedisPassword@2026!
+      - SERVER_URL=http://host.docker.internal:8081
     ports:
       - "8081:8081"
     volumes:

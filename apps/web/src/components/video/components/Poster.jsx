@@ -10,7 +10,7 @@ export default function Poster({ video, onSetVideo, isSeries }) {
   const { SERVER_URL } = config();
   const [displayEp, setDisplayEp] = useState(false);
   const [imgSrc, setImgSrc] = useState("");
-  const { id, name, fileIds, img, isNextcloudShare } = video;
+  const { id, name, fileIds, img, isNextcloudShare, fileName } = video;
 
   useEffect(() => {
     let active = true;
@@ -74,7 +74,7 @@ export default function Poster({ video, onSetVideo, isSeries }) {
                 fontWeight: 'bold'
               }}
             >
-              NC
+              NC - {fileName.replace('/', '')}
             </span>
           )}
           {name}

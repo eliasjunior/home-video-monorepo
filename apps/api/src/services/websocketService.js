@@ -9,21 +9,27 @@ export function createWebSocketService({ server, fileWatcher, publicUrl = '' }) 
   const wss = new WebSocketServer({
     server,
     path: wsPath,
-    // Don't verify origin in production (reverse proxy handles this)
     // Verify client connection
     verifyClient: (info, callback) => {
       // Log the upgrade request
+      const userAgent = info.req.headers['user-agent'] || 'unknown';
+      const isSafari = userAgent.includes('Safari') && !userAgent.includes('Chrome');
+
       console.log(`[WS] WebSocket upgrade request from: ${info.req.socket.remoteAddress}`);
+      console.log(`[WS] User-Agent: ${userAgent} (Safari: ${isSafari})`);
       console.log(`[WS] Request path: ${info.req.url}`);
       console.log(`[WS] Request headers:`, {
         'host': info.req.headers['host'],
         'origin': info.req.headers['origin'],
         'sec-websocket-key': info.req.headers['sec-websocket-key'],
         'sec-websocket-version': info.req.headers['sec-websocket-version'],
+        'sec-websocket-protocol': info.req.headers['sec-websocket-protocol'],
+        'sec-websocket-extensions': info.req.headers['sec-websocket-extensions'],
         'upgrade': info.req.headers['upgrade'],
         'connection': info.req.headers['connection'],
         'x-forwarded-for': info.req.headers['x-forwarded-for'],
-        'x-forwarded-proto': info.req.headers['x-forwarded-proto']
+        'x-forwarded-proto': info.req.headers['x-forwarded-proto'],
+        'x-real-ip': info.req.headers['x-real-ip']
       });
 
       // Check if required headers are present

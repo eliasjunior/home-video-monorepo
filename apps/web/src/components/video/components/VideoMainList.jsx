@@ -11,6 +11,7 @@ import { HAS_ERROR } from "main/Reducer";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import { getCurrentUser } from "../../../services/Api";
 import { getSharedVideoFiles } from "../../../services/auth";
+import config from "../../../config";
 
 function VideoMainList({ history, dispatch }) {
   const [movieMap, setMovieMap] = useState({});
@@ -84,6 +85,56 @@ function VideoMainList({ history, dispatch }) {
     }
   });
 
+  // Poll Nextcloud for new shares every 30 seconds if authenticated
+  useEffect(() => {
+    const nextcloudAuthEnabled = sessionStorage.getItem('nextcloud_auth_enabled') === 'true';
+    const hasNextcloudCredentials = sessionStorage.getItem('nextcloud_username') &&
+                                     sessionStorage.getItem('nextcloud_app_password');
+
+    if (!nextcloudAuthEnabled || !hasNextcloudCredentials) {
+      return;
+    }
+
+    console.log('[VideoMainList] Starting Nextcloud polling for new shares');
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const username = sessionStorage.getItem('nextcloud_username');
+        const appPassword = sessionStorage.getItem('nextcloud_app_password');
+
+        console.log('[VideoMainList] Polling Nextcloud for share updates');
+
+        const { SERVER_URL } = config();
+        const response = await fetch(`${SERVER_URL}/videos/nextcloud/shares?username=${encodeURIComponent(username)}&appPassword=${encodeURIComponent(appPassword)}`, {
+          credentials: 'include'
+        });
+
+        if (response.ok) {
+          const newShares = await response.json();
+          const currentShares = sessionStorage.getItem('nextcloud_videos');
+
+          // Only update if shares have changed
+          if (currentShares !== JSON.stringify(newShares)) {
+            console.log('[VideoMainList] Nextcloud shares updated, refreshing list');
+            sessionStorage.setItem('nextcloud_videos', JSON.stringify(newShares));
+
+            // Refresh the video list to show new Nextcloud shares
+            if (query === MOVIE_CATEG) {
+              fetchMovies();
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[VideoMainList] Error polling Nextcloud:', error);
+      }
+    }, 30000); // Poll every 30 seconds
+
+    return () => {
+      console.log('[VideoMainList] Stopping Nextcloud polling');
+      clearInterval(pollInterval);
+    };
+  }, [query, fetchMovies]);
+
   async function fetchNextcloudVideos() {
     const nextcloudEnabled = sessionStorage.getItem('nextcloud_auth_enabled') === 'true';
     if (!nextcloudEnabled) {
@@ -133,14 +184,25 @@ function VideoMainList({ history, dispatch }) {
 
         videosToMerge.forEach((ncVideo) => {
           const videoId = `nextcloud-${ncVideo.fileId}`;
+          // Extract filename from path or use fileName field directly
+          const fileName = ncVideo.fileName || ncVideo.path || ncVideo.file_target || 'Unknown';
+          const displayTitle = fileName.replace(/^\//, '').split('/').pop(); // Get just the filename without path
+
+          console.log(`[VideoMainList] Processing Nextcloud video:`, {
+            fileId: ncVideo.fileId,
+            fileName: ncVideo.fileName,
+            path: ncVideo.path,
+            displayTitle
+          });
+
           mergedById[videoId] = {
             id: videoId,
-            title: ncVideo.fileName.replace(/^\//, ''),
-            folder: `Shared by ${ncVideo.ownerDisplayName}`,
+            title: displayTitle,
+            folder: `Shared by ${ncVideo.ownerDisplayName || ncVideo.owner || 'Unknown'}`,
             isNextcloudShare: true,
             nextcloudData: ncVideo,
             // Use Nextcloud file URL for streaming
-            fileName: ncVideo.fileName
+            fileName: fileName
           };
           mergedAllIds.push(videoId);
         });
