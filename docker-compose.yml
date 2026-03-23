@@ -23,6 +23,7 @@ services:
       - "8080:8080"
     volumes:
       - /mnt/homevideo-smb:/mnt-host/homevideo-smb:ro
+      - api-prod-data:/app/data
     secrets:
       - admin_password_hash
     profiles:
@@ -60,6 +61,9 @@ services:
       - api-prod
     profiles:
       - prod
+
+volumes:
+  api-prod-data:
 
 secrets:
   admin_password_hash:
