@@ -129,6 +129,50 @@ Enable the API host (`192.168.68.120`) to read media from the HDD attached to an
 - API host can read HDD content through the mounted SMB path.
 - No disk formatting or data migration was performed.
 
+## Latest Changes (Implemented)
+
+### API `/videos` Performance and Cache
+- `GET /videos` now uses cache-first behavior (in-memory movie map).
+- Manual cache bypass is available via `GET /videos?refresh=1`.
+- Media scan path was optimized to reduce redundant work during catalog scans.
+
+### Cache Lifecycle at Startup and Runtime
+- Startup prewarm from filesystem is enabled.
+- Snapshot JSON load on boot is enabled (fast warm cache at startup).
+- Periodic background refresh is enabled.
+- Optional env tuning:
+  - `VIDEO_CACHE_REFRESH_INTERVAL_MS` (default: `1800000`, 30 minutes)
+  - `VIDEO_CACHE_SNAPSHOT_FILE` (default: `/app/data/videos-cache.json`)
+
+### Cache Observability
+- New protected endpoint:
+  - `GET /videos/cache/status`
+- Returns cache metadata including:
+  - `itemCount`
+  - `lastRefreshAt`
+  - `refreshIntervalMs`
+  - `lastRefreshError`
+  - `snapshotFile`
+
+### Streaming Reliability and Behavior
+- Fixed streaming path resolution for flat-file movies when nested path lookup fails with `ENOTDIR`/`ENOENT`.
+- No-range streaming fallback now starts with initial partial chunk (`206`) instead of full-file streaming.
+- Frontend player was updated to use direct video URL + credentialed playback flow, avoiding blob-based full file downloads.
+
+### Composition and SRP Refactor
+- Startup responsibilities were split:
+  - `startup.js` now focuses on application startup orchestration.
+  - movie catalog cache lifecycle moved to `src/composition/movieCatalogCache.js`.
+
+### Docker Compose Naming and Docs Alignment
+- Production services renamed to:
+  - `api-prod`
+  - `web-prod`
+- Development services remain:
+  - `api-dev`
+  - `web-dev`
+- Markdown docs were updated to reflect the new compose service names and related commands.
+
 ### Remaining Tasks
 1. Update Docker Compose so API container receives the mounted path (read-only).
 2. Set API environment values:
@@ -143,4 +187,3 @@ Enable the API host (`192.168.68.120`) to read media from the HDD attached to an
    - clean stale `/etc/fstab` entries,
    - backup final `smb.conf` and `fstab`,
    - reboot both Pis and verify auto-start behavior.
-

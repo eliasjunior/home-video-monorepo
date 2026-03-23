@@ -186,6 +186,7 @@ export function scheduleMovieCatalogRefresh({
   movieCatalogCacheState.nextScheduledRefreshAt = new Date(
     Date.now() + intervalMs
   ).toISOString();
+  // eslint-disable-next-line no-undef
   const timer = setInterval(() => {
     refreshMovieCatalogCacheFn({
       appConfig,

@@ -53,6 +53,12 @@ VIDEO_CACHE_REFRESH_INTERVAL_MS=1800000 # default 30 minutes
 VIDEO_CACHE_SNAPSHOT_FILE=/app/data/videos-cache.json
 ```
 
+Cache lifecycle behavior:
+- startup prewarm from filesystem: API refreshes movie catalog cache during startup
+- snapshot load on boot: API loads cached JSON snapshot before refresh when available
+- periodic background refresh: API refreshes cache on interval (`VIDEO_CACHE_REFRESH_INTERVAL_MS`)
+- manual refresh: `GET /videos?refresh=1`
+
 ### Google Drive Source (via `rclone`)
 
 The API does not call Google Drive APIs directly. It reads local filesystem paths.
@@ -191,6 +197,7 @@ Protected:
 - All existing video/series endpoints require `Authorization: Bearer <accessToken>`.
 - Cache diagnostics:
   - `GET /videos/cache/status`
+  - returns cache metadata (`itemCount`, `lastRefreshAt`, `refreshIntervalMs`, `lastRefreshError`, `snapshotFile`)
 - Progress endpoints (require auth):
   - `GET /progress/:videoId`
   - `POST /progress`

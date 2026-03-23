@@ -88,4 +88,24 @@ describe("RouterUtil.imgProvider", () => {
       logError: false,
     });
   });
+
+  it("reads poster from flat movie path when media is flat", () => {
+    const imgBuffer = Buffer.from("img");
+    readFile.mockReturnValueOnce(imgBuffer);
+
+    const result = imgProvider({
+      id: "flatMovie",
+      name: "flatMovie.mp4",
+      img: "flatMovie.jpg",
+      folder: "Movies",
+      isFlat: true,
+    });
+
+    expect(result).toBe(imgBuffer);
+    expect(readFile).toHaveBeenCalledWith({
+      absolutePath: "/videos/Movies/flatMovie.jpg",
+      encoding: "none",
+      logError: false,
+    });
+  });
 });

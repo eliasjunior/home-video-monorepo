@@ -24,9 +24,9 @@ function getImgFromMovie(req, response) {
   const { id } = req.params;
 
   const MovieMap = getMovieMap();
-  const { name, img } = MovieMap.byId[id];
+  const { name, img, isFlat } = MovieMap.byId[id];
 
-  let binImg = imgProvider({ id, name, img, folder: moviesDir });
+  let binImg = imgProvider({ id, name, img, folder: moviesDir, isFlat });
 
   response.write(binImg, "binary");
   response.end(null, "binary");

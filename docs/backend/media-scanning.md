@@ -30,6 +30,25 @@ VIDEO_PATH_GDRIVE=/path/to/google-drive-mounted/videos
 
 `VIDEO_PATH` is still accepted for compatibility.
 
+## Catalog Cache Lifecycle
+
+To reduce cold-scan latency on network-backed storage (for example SMB), the API uses:
+
+- startup prewarm: refresh movie catalog cache during app startup
+- snapshot load on boot: restore cache from JSON snapshot file when present
+- periodic background refresh: refresh cached catalog on a configured interval
+
+Relevant env options:
+
+```env
+VIDEO_CACHE_REFRESH_INTERVAL_MS=1800000
+VIDEO_CACHE_SNAPSHOT_FILE=/app/data/videos-cache.json
+```
+
+Runtime diagnostics endpoint:
+
+- `GET /videos/cache/status` (protected route)
+
 ## Flat Layout Collision Guard
 
 When using flat movie files, IDs can collide if two files share the same basename.
